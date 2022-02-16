@@ -1,32 +1,32 @@
 # RBR-CTD-Processing
 To process raw RBR CTD data in Python. RBR_Processing.py contains processing steps:
 
-Export raw data from .rsk to .csv files
+- Export raw data from .rsk to .csv files
 
-Create Metadata dictionay
+- Create Metadata dictionay
 
-Prepare CTD_DATA.csv with 6 line headers for IOSShell
+- Prepare CTD_DATA.csv with 6 line headers for IOSShell
 
-Plot and check profile locations
+- Plot and check profile locations
 
-Plot and Check for zero-order hold
+- Plot and Check for zero-order hold
 
-CALIB: Pressure/Depth correction
+- CALIB: Pressure/Depth correction
 
-CLIP: remove measurements near sea surface and bottom
+- CLIP: remove measurements near sea surface and bottom
 
-FILTER: apply a low pass filter
+- FILTER: apply a low pass filter
 
-SHIFT: shift conductivity and recalculate salinity
+- SHIFT: shift conductivity and recalculate salinity
 
-SHIFT: shift oxygen
+- SHIFT: shift oxygen
 
-DELETE: remove the pressure reversal
+- DELETE: remove the pressure reversal
 
-BINAVE: calculate bin averages
+- BINAVE: calculate bin averages
 
-EDIT: apply final editing
+- EDIT: apply final editing
 
-Prepare .ctd files with IOS Header File
+- Prepare .ctd files with IOS Header File
 
 Reference: Halverson, M., Jackson, J., Richards, C., Melling, H., Brunsting, R., Dempsey, M., Ga- tien, G., Hamilton, A., Hunt, B., Jacob, W., and Zimmerman, S. 2017. Guidelines for processing RBR CTD profiles. Can. Tech. Rep. Hydrogr. Ocean Sci. 314: iv + 38 p.
