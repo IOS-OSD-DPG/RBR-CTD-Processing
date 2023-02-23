@@ -1,5 +1,9 @@
 # RBR-CTD-Processing
-To process raw RBR CTD data in Python. RBR_Processing.py contains processing steps:
+To process raw RBR CTD data in Python. 
+
+RBR_Processing.py is deprecated and has been replaced by RBR_CTD_IOS.py.
+
+RBR_CTD_IOS.py contains processing steps:
 
 - Export raw data from .rsk to .csv files
 
