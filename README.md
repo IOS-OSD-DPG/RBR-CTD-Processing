@@ -7,7 +7,7 @@ RBR_CTD_IOS.py contains processing steps:
 
 - Export raw data from .rsk to .csv files
 
-- Create Metadata dictionay
+- Create Metadata dictionary
 
 - Prepare CTD_DATA.csv with 6 line headers for IOSShell
 
