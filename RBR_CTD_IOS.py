@@ -1965,7 +1965,7 @@ def DERIVE_OXYGEN_CONCENTRATION(var_downcast: dict, var_upcast: dict,
             var[cast_i]['Oxygen_mL_L'] = O_mL_L
             var[cast_i]['Oxygen_umol_kg'] = O_umol_kg
 
-    metadata_dict['Processing_history'] += 'Oxygen concentration was calculated from oxygen ' \
+    metadata_dict['Processing_history'] += '-Oxygen concentration was calculated from oxygen ' \
                                            'saturation using SCOR WG 142|'
     metadata_dict['DERIVE_OXYGEN_CONCENTRATION_Time'] = datetime.now()
     return var1, var2
@@ -2493,17 +2493,15 @@ def write_file(cast_number, cast_original: dict, cast_final: dict,
             # nanmin and nanmax will still include -99 pad values in computation????
             # todo IndexError: index 10 is out of bounds for axis 0 with size 10 on .columns[i+1], try [i]
             print('{:>8}'.format(str(current_chan_no)) + " " +
-                  '{:33}'.format(cast_final[f'cast{cast_number}'].columns[i]) +
-                  '{:15}'.format(unit) + '{:15}'.format(
+                  '{:33}'.format(ios_name) + '{:15}'.format(unit) + '{:15}'.format(
                 str(np.nanmin(cast_final[f'cast{cast_number}'].loc[:, df_name].astype(dtype_minmax)))) +
                   '{:14}'.format(
                       str(float(
                           format_max % np.nanmax(
                               cast_final[f'cast{cast_number}'].loc[:, df_name].astype(dtype_minmax))))))
         else:
-            print('{:>8}'.format(str(current_chan_no)) + " " + '{:33}'.format(
-                cast_final[f'cast{cast_number}'].columns[i]) + '{:15}'.format(
-                unit) + '{:15}'.format(
+            print('{:>8}'.format(str(current_chan_no)) + " " +
+                  '{:33}'.format(ios_name) + '{:15}'.format(unit) + '{:15}'.format(
                 str(np.nanmin(cast_final[f'cast{cast_number}'].loc[:, df_name].astype(dtype_minmax)))) +
                   '{:14}'.format(
                       str(np.nanmax(cast_final[f'cast{cast_number}'].loc[:, df_name].astype(dtype_minmax)))))
@@ -2670,17 +2668,38 @@ def write_location(cast_number: int, metadata_dict: dict):
     event_number = metadata_dict['Location']['LOC:Event Number'].tolist()
     lon = metadata_dict['Location']['LOC:LONGITUDE'].tolist()
     lat = metadata_dict['Location']['LOC:LATITUDE'].tolist()
+    water_depth = metadata_dict['Location']['LOC:Water Depth'].tolist()
+
+    station_number = str(station_number[event_number == cast_number])
+    lon = lon[event_number == cast_number].split(" ")
+    lat = lat[event_number == cast_number].split(" ")
+    water_depth = str(water_depth[event_number == cast_number])
+
+    # Correct lat and lon formatting
+    # Fill lat and lon degree placement to 3 characters with spaces if needed
+    lat[0] = f"  {lat[0]}"[-3:]
+    lon[0] = f"  {lon[0]}"[-3:]
+    # Remove filler zero from minutes part of coordinates
+    if lat[1][0] == '0':
+        lat[1] = lat[1][1:]
+    if lon[1][0] == '0':
+        lon[1] = lon[1][1:]
+
     print("*LOCATION")
     # print("    " + '{:20}'.format('STATION') + ": " + str(station_number[cast_number - 1]))
     # print("    " + '{:20}'.format('EVENT NUMBER') + ": " + str(event_number[cast_number - 1]))
     # print("    " + '{:20}'.format('LATITUDE') + ":  " + lat[cast_number - 1][0:10] +
     #       "0 " + lat[cast_number - 1][-14:-1] + ")")
     # print("    " + '{:20}'.format('LONGITUDE') + ": " + lon[cast_number - 1])
-    print("    " + '{:20}'.format('STATION') + ": " + str(station_number[event_number == cast_number]))
+    print("    " + '{:20}'.format('STATION') + ": " + station_number)
     print("    " + '{:20}'.format('EVENT NUMBER') + ": " + str(event_number[event_number == cast_number]))
-    print("    " + '{:20}'.format('LATITUDE') + ":  " + lat[event_number == cast_number][0:10] +
-          "0 " + lat[event_number == cast_number][-14:-1] + ")")
-    print("    " + '{:20}'.format('LONGITUDE') + ": " + lon[event_number == cast_number])
+    # print("    " + '{:20}'.format('LATITUDE') + ":  " + lat[0:10] + "0" + lat[-14:])
+    # print("    " + '{:20}'.format('LONGITUDE') + ": " + lon[0:11] + "0" + lon[-14:])
+    print("    " + '{:20}'.format('LATITUDE') + ": " + lat[0] + " " + lat[1] + "0 " + lat[2] +
+          "  ! (deg min)")
+    print("    " + '{:20}'.format('LONGITUDE') + ": " + lon[0] + " " + lon[1] + "0 " + lon[2] +
+          "  ! (deg min)")
+    print("    " + '{:20}'.format('WATER DEPTH') + ": " + water_depth)
     print()
     return
 
@@ -2688,14 +2707,17 @@ def write_location(cast_number: int, metadata_dict: dict):
 def write_instrument(metadata_dict: dict):
     """function to write instrument info"""
     model = metadata_dict['Instrument_Model']
-    serial_number = f'{0:0}' + metadata_dict['Serial_number']
+    if int(metadata_dict['Serial_number']) < 1000:
+        serial_number = f'{0:0}' + metadata_dict['Serial_number']
+    else:
+        serial_number = metadata_dict['Serial_number']
     data_description = metadata_dict['Data_description']
     instrument_type = metadata_dict['Instrument_type']
     print("*INSTRUMENT")
     print("    MODEL               : " + model)
     print("    SERIAL NUMBER       : " + serial_number)
-    print("    INSTRUMENT TYPE     : " + instrument_type + "                           ! custom item")
     print("    DATA DESCRIPTION    : " + data_description + "                               ! custom item")
+    print("    INSTRUMENT TYPE     : " + instrument_type + "                           ! custom item")
     print()
     return
 
@@ -2826,6 +2848,8 @@ def write_comments(have_fluor: bool, have_oxy: bool, processing_report_name: str
     # print("       " + "For details on the processing see document: " + cruise_ID + "RBR_Processing_Report.doc.")
     print("       " + "For details on the processing see document: " + processing_report_name + ".")
     # add name of processing report as an input parameter as some say "RBR" and have docx suffix
+    print()
+    print("    " + "-" * 85)
 
     if have_fluor and have_oxy:  # todo review number of decimal places for each channel esp. oxygens. compare w SBE
         print("!--1--- --2--- ---3---- ---4---- ---5--- ---6--- ---7--- ---8--- ----9---- -10-")
