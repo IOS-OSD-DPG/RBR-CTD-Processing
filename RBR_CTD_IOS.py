@@ -123,11 +123,13 @@ VARIABLE_COLOURS = ['b', 'r', 'goldenrod', 'grey', 'g', 'grey', 'grey']
 # -------------------  Exploring if we can input mulitple .rsk files----------------------
 
 
-def EXPORT_MULTIFILES(dest_dir, year: str, cruise_number: str,
-                      skipcasts=0, rsk_time1=None, rsk_time2=None):
-    # Replace all_last parameter to skipcasts: list-like or int.
-    # For cases when there are data from previous cruise in the file, or initial test casts, or soaks
+def EXPORT_RSK(dest_dir, year: str, cruise_number: str,
+               skipcasts=0, rsk_time1=None, rsk_time2=None):
     """
+    Formerly EXPORT_MULTIFILES
+    Replace all_last parameter to skipcasts: list-like or int For cases when there
+    are data from previous cruise in the file, or initial test casts, or soaks
+
     Read in a directory of rsk files and output in csv format
     Inputs:
         - folder, file, year, cruise_number: rsk-format file containing raw RBR data
@@ -297,8 +299,12 @@ def READ_EXCELrsk(dest_dir, year: str, cruise_number: str, skipcasts=0):
         # See release notes
         df1 = pd.read_excel(filename, sheet_name='Data', skiprows=[0], engine='openpyxl')  # engine=openpyxl
 
-        df2 = pd.read_excel(filename, sheet_name='Profile_annotation', skiprows=[0],
-                            engine='openpyxl')
+        try:
+            df2 = pd.read_excel(filename, sheet_name='Profile_annotation', skiprows=[0],
+                                engine='openpyxl')
+        except:
+            print('Must change "Profile annotation" sheet name to "Profile_annotation"')
+            return
         # df3 = pd.read_excel(filename, sheet_name='Metadata', skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
         #                     usecols=[2], engine='openpyxl')
         # print(df1.keys)
@@ -1422,7 +1428,6 @@ def CLIP_CAST(var: dict, metadata_dict: dict, limit_pressure_change: float,
          - Upcast after removing records near surface and bottom
     direction: 'down' or 'up'
     """
-    # todo speed up this function?
     var_clip = deepcopy(var)
     for cast_i in var.keys():
         pressure = var_clip[cast_i].Pressure
@@ -1559,7 +1564,6 @@ def CLIP_CAST(var: dict, metadata_dict: dict, limit_pressure_change: float,
 # Plot to check the profiles after clip by cast
 def plot_clip(cast_d_clip: dict, cast_d_pc: dict, dest_dir):
     """ plot the clipped casts to make sure they are OK"""
-    # todo fix ticks  on time axis to be more spaced out
 
     # Create a folder for figures if it doesn't already exist
     figure_dir = os.path.join(dest_dir, 'FIG')
@@ -1571,7 +1575,7 @@ def plot_clip(cast_d_clip: dict, cast_d_pc: dict, dest_dir):
         ax.plot(cast_d_pc[cast_i].TIME, cast_d_pc[cast_i].Pressure,
                 color='blue')
     xticks = ax.get_xticks()
-    ax.set_xticks(ticks=xticks[::50])
+    ax.set_xticks(ticks=xticks[::300])
     format_profile_plot(ax, var_name='Time', var_units=None, plot_title='Before Clip')
     plt.savefig(os.path.join(figure_dir, 'Before_Clip_P_vs_t.png'))
     plt.close(fig)
@@ -1581,7 +1585,7 @@ def plot_clip(cast_d_clip: dict, cast_d_pc: dict, dest_dir):
         ax.plot(cast_d_clip[cast_i].TIME, cast_d_clip[cast_i].Pressure,
                 color='blue')
     xticks = ax.get_xticks()
-    ax.set_xticks(ticks=xticks[::50])
+    ax.set_xticks(ticks=xticks[::300])
     format_profile_plot(ax, var_name='Time', var_units=None, plot_title='After Clip')
     plt.savefig(os.path.join(figure_dir, 'After_Clip_P_vs_t.png'))
     plt.close(fig)
@@ -1934,6 +1938,7 @@ def DERIVE_OXYGEN_CONCENTRATION(var_downcast: dict, var_upcast: dict,
         - var1, var2
     """
     umol_L_to_mL_L = 1 / 44.6596
+    m3_to_L = 1e3
     cast_number = len(var_downcast.keys())
     var1 = deepcopy(var_downcast)
     var2 = deepcopy(var_upcast)
@@ -1954,14 +1959,16 @@ def DERIVE_OXYGEN_CONCENTRATION(var_downcast: dict, var_upcast: dict,
             O_umol_L = O2stoO2c(O_sat, T, S)
             # Convert to mL/L
             O_mL_L = O_umol_L * umol_L_to_mL_L
-            # todo Convert to umol/kg using potential density of seawater (kg/L) from
+            # Convert to umol/kg using potential density of seawater (kg/L) from
             # Fofonoff and Millard (1983) and Millero et al. (1980).
             # rho: potential density of seawater referenced to a hydrostatic pressure
             # of 0 dbar and using practical salinity.
             # Since TEOS-10 is based off ABSOLUTE salinity, it can't be used here!
             # One option is seawater.eos80.pden() potential density
-            rho = eos80.pden(S, T, P)
-            O_umol_kg = O_umol_L / rho
+            # Returns potential density relative to the ref. pressure [kg m :sup:3]
+            rho_kg_m3 = eos80.pden(S, T, P)
+            rho_kg_L = rho_kg_m3 / m3_to_L
+            O_umol_kg = O_umol_L / rho_kg_L
             var[cast_i]['Oxygen_mL_L'] = O_mL_L
             var[cast_i]['Oxygen_umol_kg'] = O_umol_kg
 
@@ -2099,7 +2106,8 @@ def DERIVE_OXYGEN_CONCENTRATION(var_downcast: dict, var_upcast: dict,
 # correct for the wake effect, remove the pressure reversal
 
 
-def DELETE_PRESSURE_REVERSAL(var_downcast, var_upcast, metadata_dict):
+def DELETE_PRESSURE_REVERSAL(var_downcast: dict, var_upcast: dict,
+                             metadata_dict: dict):
     """
      Detect and delete pressure reversal
      Inputs:
@@ -2107,14 +2115,13 @@ def DELETE_PRESSURE_REVERSAL(var_downcast, var_upcast, metadata_dict):
      Outputs:
          - two dictionaries containing downcast and upcast profiles
      """
-    # todo review this, as 2022-025-0001.ctd has 118 records in 1.8dbar bin
-    cast_number = len(var_downcast.keys())
+    # cast_number = len(var_downcast.keys())
     var1 = deepcopy(var_downcast)
     var2 = deepcopy(var_upcast)
     for cast_i in var1.keys():
         press = var1[cast_i].Pressure.values
         ref = press[0]
-        inversions = np.diff(np.r_[press, press[-1]]) < 0
+        inversions = np.diff(np.r_[press, press[-1]]) < 0  # a mask
         mask = np.zeros_like(inversions)
         for k, p in enumerate(inversions):
             if p:
@@ -2230,7 +2237,7 @@ def BINAVE(var_downcast: dict, var_upcast: dict, metadata_dict: dict, interval=1
      Outputs:
          - two dictionaries containing downcast and upcast profiles
      """
-    cast_number = len(var_downcast.keys())
+    # cast_number = len(var_downcast.keys())
     var1 = deepcopy(var_downcast)
     var2 = deepcopy(var_upcast)
     # Iterate through all the casts
@@ -2491,7 +2498,6 @@ def write_file(cast_number, cast_original: dict, cast_final: dict,
         if format_max:
             # The min is not formatted but the max is
             # nanmin and nanmax will still include -99 pad values in computation????
-            # todo IndexError: index 10 is out of bounds for axis 0 with size 10 on .columns[i+1], try [i]
             print('{:>8}'.format(str(current_chan_no)) + " " +
                   '{:33}'.format(ios_name) + '{:15}'.format(unit) + '{:15}'.format(
                 str(np.nanmin(cast_final[f'cast{cast_number}'].loc[:, df_name].astype(dtype_minmax)))) +
@@ -2664,16 +2670,19 @@ def write_location(cast_number: int, metadata_dict: dict):
      Outputs:
          - part of txt file
      """
-    station_number = metadata_dict['Location']['LOC:STATION'].tolist()
-    event_number = metadata_dict['Location']['LOC:Event Number'].tolist()
-    lon = metadata_dict['Location']['LOC:LONGITUDE'].tolist()
-    lat = metadata_dict['Location']['LOC:LATITUDE'].tolist()
-    water_depth = metadata_dict['Location']['LOC:Water Depth'].tolist()
+    station = metadata_dict['Location']['LOC:STATION'].to_numpy()
+    event_number = metadata_dict['Location']['LOC:Event Number'].to_numpy()
+    lon = metadata_dict['Location']['LOC:LONGITUDE'].to_numpy()
+    lat = metadata_dict['Location']['LOC:LATITUDE'].to_numpy()
+    water_depth = metadata_dict['Location']['LOC:Water Depth'].to_numpy()
 
-    station_number = str(station_number[event_number == cast_number])
-    lon = lon[event_number == cast_number].split(" ")
-    lat = lat[event_number == cast_number].split(" ")
-    water_depth = str(water_depth[event_number == cast_number])
+    event_mask = event_number == cast_number
+
+    station = str(station[event_mask][0])
+    event_number = str(event_number[event_mask][0])
+    lon = lon[event_mask][0].split(" ")
+    lat = lat[event_mask][0].split(" ")
+    water_depth = str(water_depth[event_mask][0])
 
     # Correct lat and lon formatting
     # Fill lat and lon degree placement to 3 characters with spaces if needed
@@ -2691,8 +2700,8 @@ def write_location(cast_number: int, metadata_dict: dict):
     # print("    " + '{:20}'.format('LATITUDE') + ":  " + lat[cast_number - 1][0:10] +
     #       "0 " + lat[cast_number - 1][-14:-1] + ")")
     # print("    " + '{:20}'.format('LONGITUDE') + ": " + lon[cast_number - 1])
-    print("    " + '{:20}'.format('STATION') + ": " + station_number)
-    print("    " + '{:20}'.format('EVENT NUMBER') + ": " + str(event_number[event_number == cast_number]))
+    print("    " + '{:20}'.format('STATION') + ": " + station)
+    print("    " + '{:20}'.format('EVENT NUMBER') + ": " + str(event_number))
     # print("    " + '{:20}'.format('LATITUDE') + ":  " + lat[0:10] + "0" + lat[-14:])
     # print("    " + '{:20}'.format('LONGITUDE') + ": " + lon[0:11] + "0" + lon[-14:])
     print("    " + '{:20}'.format('LATITUDE') + ": " + lat[0] + " " + lat[1] + "0 " + lat[2] +
@@ -2851,7 +2860,7 @@ def write_comments(have_fluor: bool, have_oxy: bool, processing_report_name: str
     print()
     print("    " + "-" * 85)
 
-    if have_fluor and have_oxy:  # todo review number of decimal places for each channel esp. oxygens. compare w SBE
+    if have_fluor and have_oxy:
         print("!--1--- --2--- ---3---- ---4---- ---5--- ---6--- ---7--- ---8--- ----9---- -10-")
         print("!Pressu Depth  Temperat Salinity Fluores Oxygen: Oxygen: Oxygen: Conductiv Numb")
         print("!re            ure               cence:  Dissolv Dissolv Dissolv ity       er_o")
@@ -2989,7 +2998,7 @@ def main_header(dest_dir, n_cast: int, metadata_dict: dict, cast: dict,
 
         # def write_file(cast_number, cast_original, cast_final, metadata_dict):
         write_admin(metadata_dict=metadata_dict)
-        write_location(n_cast, metadata_dict=metadata_dict)
+        write_location(cast_number=n_cast, metadata_dict=metadata_dict)
         write_instrument(metadata_dict=metadata_dict)
         write_history(have_oxy, cast_d, cast_d_clip, cast_d_filtered,
                       cast_d_shift_c, cast_d_shift_o, cast_d_o_conc,
@@ -3061,8 +3070,7 @@ def first_step(dest_dir, year: str, cruise_number: str,
      """
 
     if data_file_type == 'rsk':
-        EXPORT_MULTIFILES(dest_dir, year, cruise_number, skipcasts,
-                          rsk_time1, rsk_time2)
+        EXPORT_RSK(dest_dir, year, cruise_number, skipcasts, rsk_time1, rsk_time2)
     elif data_file_type == 'excel':
         # input file =  # not needed, filtered to keep only .xls
         READ_EXCELrsk(dest_dir, year, cruise_number, skipcasts)
@@ -3319,13 +3327,13 @@ def test_process():
     # first_step(test_dir, test_year, test_cruise_num, test_event_start, 'ALL', 'rsk',
     #            num_profiles)
 
-    second_step(test_dir, test_year, test_cruise_num, processing_report_name,
-                test_file, window_width=3, filter_type=1, verbose=True)
+    # second_step(test_dir, test_year, test_cruise_num, processing_report_name,
+    #             test_file, window_width=3, filter_type=1, verbose=True)
 
-    # PROCESS_RBR(test_dir, test_year, test_cruise_num,
-    #             processing_report_name=processing_report_name, rsk_file=test_file,
-    #             data_file_type='rsk', skipcasts=skipcasts,
-    #             window_width=3, shift_recs_conductivity=2,  # sample_rate=8, time_constant=1 / 8,
-    #             shift_recs_oxygen=-11, verbose=True)
+    PROCESS_RBR(test_dir, test_year, test_cruise_num,
+                processing_report_name=processing_report_name, rsk_file=test_file,
+                data_file_type='rsk', skipcasts=skipcasts,
+                window_width=3, shift_recs_conductivity=2,  # sample_rate=8, time_constant=1 / 8,
+                shift_recs_oxygen=-11, verbose=True)
 
     return
