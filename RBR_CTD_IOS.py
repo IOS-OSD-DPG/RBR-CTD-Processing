@@ -1,5 +1,3 @@
-# to write files similar to IOS output files:
-
 """
 author: Lu Guan
 date: Oct. 06, 2020
@@ -123,10 +121,10 @@ VARIABLE_COLOURS = ['b', 'r', 'goldenrod', 'grey', 'g', 'grey', 'grey']
 # -------------------  Exploring if we can input mulitple .rsk files----------------------
 
 
-def EXPORT_RSK(dest_dir, year: str, cruise_number: str,
+def EXPORT_RSK(dest_dir: str, year: str, cruise_number: str,
                skipcasts=0, rsk_time1=None, rsk_time2=None):
     """
-    Formerly EXPORT_MULTIFILES
+    Formerly EXPORT_MULTIFILES()
     Replace all_last parameter to skipcasts: list-like or int For cases when there
     are data from previous cruise in the file, or initial test casts, or soaks
 
@@ -144,14 +142,15 @@ def EXPORT_RSK(dest_dir, year: str, cruise_number: str,
     # current_profile = event_start
     header_merge_file = os.path.join(dest_dir, f'{year}-{cruise_number}_header-merge.csv')
     header_merge_df = pd.read_csv(header_merge_file)
+    # Get event numbers from the header-merge.csv file
     header_event_no = header_merge_df.loc[:, 'LOC:Event Number'].to_numpy()
     event_number_idx = 0  # initialize counter to go through the event numbers in header_merge_df
 
-    # function to export .csv files from .rsk files .
+    # Iterate through all the rsk files that were found
     for k in range(n_files):
         print(files[k])
         # Open the rsk file and read the data within it
-        filename = str(dest_dir) + str(files[k])  # full path and name of .rsk file
+        filename = os.path.join(str(dest_dir), str(files[k]))  # full path and name of .rsk file
         # readHiddenChannels=True does not reveal the derived variables
         rsk = pyrsktools.RSK(filename, readHiddenChannels=False)  # load up an RSK
         rsk.open()
@@ -199,7 +198,6 @@ def EXPORT_RSK(dest_dir, year: str, cruise_number: str,
             rsk.computeprofiles()  # This should fix the problem
             downcastIndices = rsk.getprofilesindices(direction="down")
             upcastIndices = rsk.getprofilesindices(direction="up")
-        # firstDowncastIndices = rsk.getprofilesindices(profiles=1, direction="down")
 
         # check the number of profiles
         n_profiles = len(downcastIndices)  # get the number of profiles recorded
@@ -207,18 +205,11 @@ def EXPORT_RSK(dest_dir, year: str, cruise_number: str,
         if type(skipcasts) == int:
             profile_range = range(skipcasts, n_profiles)
         elif len(skipcasts) == len(header_event_no):
+            # Check that for each event there is a corresponding number of casts to skip
             profile_range = range(skipcasts[k], n_profiles)
         else:
             print(f'Invalid skipcasts value, {skipcasts}. Must be int or same length as number of rsk files.')
             return
-        # if all_last == 'ALL':  # get all profiles within each .rsk file
-        #     profile_range = range(n_profiles)
-        # elif all_last == 'LAST':
-        #     profile_range = range(n_profiles - 1, n_profiles)
-        #     # export .csv file for each profile
-        # else:
-        #     print(f'Invalid selection of profiles all_last={all_last}, must specify "ALL" or "LAST"')
-        #     return
 
         # Iterate through the selected profiles in one rsk file
         for i in profile_range:
@@ -259,25 +250,23 @@ def EXPORT_RSK(dest_dir, year: str, cruise_number: str,
             profile_name = '{}_profile{}.csv'.format(
                 os.path.basename(filename)[:-4], str(header_event_no[event_number_idx]).zfill(4))
 
-            # profile_data['Event'] = e_num + 1
-            profile_data.to_csv(dest_dir + profile_name)  # export each profile
+            profile_data.to_csv(dest_dir + profile_name, index=False)  # export each profile
             # current_profile = current_profile + 1  # sequential profiles through the files
             event_number_idx += 1
     return
 
 
-# ------------------------- step 1a - alternative if rsk file cant be used and an excel file is used instead...........
-
-def READ_EXCELrsk(dest_dir, year: str, cruise_number: str, skipcasts=0):
+def READ_EXCELrsk(dest_dir: str, year: str, cruise_number: str, skipcasts=0):
     """
-    #function to read in an excel (.xlxs) file exported from RUSKIN software using
-    the rbr .rsk file.
+    Function to read in an excel (.xlxs) file exported from RUSKIN software using
+    the rbr .rsk file. An alternative to reading data directly from the .rsk files.
     inputs
     - dest_dir
     - year
     - cruise_number
-    - event_start
-    - all_last: 'ALL' or 'LAST' which casts to extract from input excel file
+    - skipcasts: number of casts to skip over in an excel file when writing data to output format.
+        Input format as either an integer or as a list-like object with one integer per excel file
+        representing the number of initial casts to skip in each excel file.
    """
 
     files = os.listdir(dest_dir)  # list all the files in dest_dir
@@ -290,24 +279,25 @@ def READ_EXCELrsk(dest_dir, year: str, cruise_number: str, skipcasts=0):
     header_event_no = header_merge_df.loc[:, 'LOC:Event Number'].to_numpy()
     event_number_idx = 0  # initialize counter to go through the event numbers in header_merge_df
 
+    # Iterate through all available excel files
     for k in range(n_files):
-        filename = str(dest_dir) + str(files[k])  # full path and name of .rsk file
+        filename = os.path.join(str(dest_dir), str(files[k]))  # full path and name of .rsk file
 
         # extract a dataframe from the excel sheets
         # hourstonh 2022-01-25: xlrd package does not read xlsx files any more
         # https://groups.google.com/g/python-excel/c/IRa8IWq_4zk/m/Af8-hrRnAgAJ?pli=1
         # See release notes
         df1 = pd.read_excel(filename, sheet_name='Data', skiprows=[0], engine='openpyxl')  # engine=openpyxl
-
         try:
             df2 = pd.read_excel(filename, sheet_name='Profile_annotation', skiprows=[0],
                                 engine='openpyxl')
-        except:
-            print('Must change "Profile annotation" sheet name to "Profile_annotation"')
+        except ValueError:
+            print('User must change "Profile annotation" sheet name to "Profile_annotation"')
             return
         # df3 = pd.read_excel(filename, sheet_name='Metadata', skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
         #                     usecols=[2], engine='openpyxl')
-        # print(df1.keys)
+
+        # Convert time data to pandas datetime format
         df1['Time'] = pd.to_datetime(df1['Time'])
         df2['Time 1'] = pd.to_datetime(df2['Time 1'])
         df2['Time 2'] = pd.to_datetime(df2['Time 2'])
@@ -323,13 +313,9 @@ def READ_EXCELrsk(dest_dir, year: str, cruise_number: str, skipcasts=0):
         up_times['End'] = df2['Time 2'][2::3]
         up_times.index = range(len(up_times))
 
-        n_times = len(list(down_times['Start']))
+        n_times = len(list(down_times['Start']))  # Number of casts in the input file
 
         # ctd_data = pd.DataFrame()
-
-        # # Change the range depending on if "All" or "Last"
-        # range_start = 0 if all_last == 'ALL' else n_times - 1
-        # # for i in range(0, n_times, 1):
 
         # Iterate through the profiles in a single file
         if type(skipcasts) == int:
@@ -392,13 +378,7 @@ def READ_EXCELrsk(dest_dir, year: str, cruise_number: str, skipcasts=0):
             # Update event number index counter
             event_number_idx += 1
 
-        # if all_last == 'ALL':
-        #     event_start = current_profile
-
         return
-
-
-# ------------ step 1b: .rsk file in full structure - combine profiles into one .csv file ------------
 
 
 def MERGE_FILES(dest_dir: str, year: str, cruise_number: str):
@@ -412,14 +392,14 @@ def MERGE_FILES(dest_dir: str, year: str, cruise_number: str):
     files = os.listdir(dest_dir)  # list all the files in dest_dir
     # keep the profile csv files only
     files = list(filter(lambda fname: 'profile' in fname, files))
-    event_csv = pd.read_csv(dest_dir + year + '-'
-                            + cruise_number + '_header-merge.csv')
-
+    # event_csv = pd.read_csv(dest_dir + year + '-'
+    #                         + cruise_number + '_header-merge.csv')
     files.sort(key=lambda x: int(x[-8:-4]))  # reorder the files according to profile number
-    n_profiles = len(files)
+
     ctd_data = pd.DataFrame()  # set an empty pandas dataframe to store data
 
-    for i in range(n_profiles):
+    # Iterate through all profiles and concatenate them together to form one dataset
+    for i in range(len(files)):
         input_filename = str(dest_dir) + str(files[i])
         # data = pd.read_csv(input_filename, sep=',', skiprows=range(0, 20),
         #                    encoding= 'unicode_escape') #original by Lu
@@ -437,26 +417,26 @@ def MERGE_FILES(dest_dir: str, year: str, cruise_number: str):
         ctd_data.rename({'//Time(yyyy-mm-dd HH:MM:ss.FFF)': 'Time(yyyy-mm-dd HH:MM:ss.FFF)'},
                         axis=1, inplace=True)
 
+    # Output merged dataset in csv format
     output_filename = year + '-' + cruise_number + '_CTD_DATA.csv'
-
     ctd_data.to_csv(dest_dir + output_filename, index=False)
     return
 
 
-# ----------------------------   Step 2. Create Metadata dictionary    -------------------------------
 def CREATE_META_DICT(dest_dir: str, rsk_file: str, year: str, cruise_number: str,
                      rsk_time1=None, rsk_time2=None) -> dict:
     """
-     Read in a csv file and output a metadata dictionary
+     Read in a csv file and output a metadata dictionary. Use a .rsk file to get channel details.
      Inputs:
          - folder, file, year, cruise_number:
          - rsk_file: rsk-format file containing raw RBR data & csv file containing metadata
      Outputs:
          - metadata dictionary
      """
+    # Initialize metadata dictionary
     meta_dict = {}
-    # function to export .csv files from .rsk file.
-    rsk_full_path = str(dest_dir) + str(rsk_file)  # full path and name of a .rsk file
+    # Read in a .rsk file just to get the channel details
+    rsk_full_path = os.path.join(str(dest_dir), str(rsk_file))  # full path and name of a .rsk file
     rsk = pyrsktools.RSK(rsk_full_path, readHiddenChannels=False)  # load up an RSK
     rsk.open()
     rsk.readdata(t1=rsk_time1, t2=rsk_time2)
@@ -492,36 +472,20 @@ def CREATE_META_DICT(dest_dir: str, rsk_file: str, year: str, cruise_number: str
     # meta_dict['Channel_details'] = list(rsk.channels.items())
     meta_dict['Channel_details'] = rsk.channels
     meta_dict['Number_of_channels'] = len(rsk.channels)
+    meta_dict['Location'] = header
 
     for key in ['number_of_profiles', 'Data_description', 'Final_file_type',
                 'Mission', 'Agency', 'Country', 'Project', 'Scientist',
                 'Platform', 'Instrument_Model', 'Serial_number',
                 'Instrument_type']:
         meta_dict[key] = meta_csv['Value'][meta_csv['Name'] == key].values[0]
-    # meta_dict['Data_description'] = meta_csv['Value'][meta_csv['Name'] == 'Data_description'].values[0]
-    # meta_dict['Final_file_type'] = meta_csv['Value'][meta_csv['Name'] == 'Final_file_type'].values[0]
-    # meta_dict['Number_of_channels'] = meta_csv['Value'][meta_csv['Name'] == 'Number_of_channels'].values[0]
-    # # meta_dict['Number_of_channels'] = len(list(rsk.channels.items())
-    # meta_dict['Mission'] = meta_csv['Value'][meta_csv['Name'] == 'Mission'].values[0]
-    # meta_dict['Agency'] = meta_csv['Value'][meta_csv['Name'] == 'Agency'].values[0]
-    # meta_dict['Country'] = meta_csv['Value'][meta_csv['Name'] == 'Country'].values[0]
-    # meta_dict['Project'] = meta_csv['Value'][meta_csv['Name'] == 'Project'].values[0]
-    # meta_dict['Scientist'] = meta_csv['Value'][meta_csv['Name'] == 'Scientist'].values[0]
-    # meta_dict['Platform'] = meta_csv['Value'][meta_csv['Name'] == 'Platform'].values[0]
-    # meta_dict['Instrument_Model'] = meta_csv['Value'][meta_csv['Name'] == 'Instrument_Model'].values[0]
-    # meta_dict['Serial_number'] = meta_csv['Value'][meta_csv['Name'] == 'Serial_number'].values[0]
-    # meta_dict['Instrument_type'] = meta_csv['Value'][meta_csv['Name'] == 'Instrument_type'].values[0]
-    meta_dict['Location'] = header
+
     return meta_dict
-
-
-# ---------------  step 3. Add 6 line headers to CTD_DATA.csv file ------------------------
-# Prepare data file with six line header for further applications in IOS Shell
 
 
 def ADD_6LINEHEADER_2(dest_dir: str, year: str, cruise_number: str):
     """
-     Read in a csv file and output in csv format for IOSShell
+     Read in a csv file and output in csv format for use in IOSShell
      Filter through the csv and remove un-needed columns.
      Inputs:
          - folder, file, year, cruise: csv-format file containing raw RBR CTD data
@@ -544,26 +508,41 @@ def ADD_6LINEHEADER_2(dest_dir: str, year: str, cruise_number: str):
     ctd_data['Date'] = pd.to_datetime(ctd_data['Date'], format='%Y-%m-%d').dt.strftime('%d/%m/%Y')
 
     # make a list of columns to drop
-    drop_list = ['Temperature .1(Â°C)', 'speedofsound(m/s)', 'Temperature .1', 'Temperature.1',
-                 'Speed of sound ', 'Speed of sound', 'speed_of_sound(m/s)',
-                 'specificconductivity(ÂµS/cm)', 'specific_conductivity(ÂµS/cm)',
-                 'Density anomaly', 'Density anomaly ', 'Dissolved Oâ,,Concentration',
-                 'Dissolved OÃ¢Â‚Â‚ concentration ', 'Dissolved OÃ¢Â‚Â‚ concentration',
-                 'Specific conductivity ', 'Dissolved O₂ concentration',
-                 'Specific conductivity', 'Dissolved Oâ\x82\x82 concentration ',
-                 'Dissolved Oâ\x82\x82 concentration', 'Turbidity', 'Dissolved O2 concentration']
+    # drop_list = ['Temperature .1(Â°C)', 'temperature1(Ã‚Â°C)', 'Temperature .1', 'Temperature.1',
+    #              'Speed of sound ', 'Speed of sound', 'speed_of_sound(m/s)', 'speedofsound(m/s)',
+    #              'specificconductivity(ÂµS/cm)', 'specific_conductivity(ÂµS/cm)',
+    #              'Specific conductivity ', 'Specific conductivity',
+    #              'Density anomaly', 'Density anomaly ',
+    #              'Dissolved Oâ,,Concentration', 'Dissolved OÃ¢Â‚Â‚ concentration ',
+    #              'Dissolved OÃ¢Â‚Â‚ concentration', 'Dissolved O₂ concentration',
+    #              'Dissolved O2 concentration', 'Dissolved Oâ\x82\x82 concentration ',
+    #              'Dissolved Oâ\x82\x82 concentration',
+    #              'Turbidity', 'turbidity(NTU)',
+    #              'Time(yyyy-mm-dd HH:MM:ss.FFF)', 'Unnamed: 0']
 
-    # drop first indexing row and Time(HH....) plus everything in drop_list
-    if 'Unnamed: 0' in ctd_data.columns[0]:
-        drop_list.append('Unnamed: 0')
-    drop_list.append('Time(yyyy-mm-dd HH:MM:ss.FFF)')
+    # Rules to replace list of columns to drop; may not be full-proof
+    is_temperature_secondary = lambda name: 'temperature' in name.lower() and '1' in name
+    is_speedofsound = lambda name: 'speed' in name.lower() and 'sound' in name.lower()
+    is_specificconductivity = lambda name: 'specific' in name.lower() and 'conductivity' in name.lower()
+    is_densityanomaly = lambda name: 'density' in name.lower() and 'anomaly' in name.lower()
+    is_dissolvedO2concentration = lambda \
+        name: 'dissolved' in name.lower() and 'O' in name and 'concentration' in name.lower()
+    is_turbidity = lambda name: 'turbidity' in name.lower()
+
+    drop_list = ['Time(yyyy-mm-dd HH:MM:ss.FFF)', 'Unnamed: 0']
+    for col in ctd_data.columns:
+        if any([is_temperature_secondary(col), is_speedofsound(col),
+                is_specificconductivity(col), is_densityanomaly(col),
+                is_dissolvedO2concentration(col), is_turbidity(col)]):
+            drop_list.append(col)
+
+    # Drop first indexing row and Time(HH....) plus everything else in drop_list if present
     # Ignore KeyError if columns in drop_list do not exist in the dataframe
     ctd_data.drop(columns=drop_list, inplace=True, errors='ignore')
     # ctd_data.reset_index(drop=True, inplace=True)
 
     col_list = ctd_data.columns.tolist()
     print(col_list)
-    # n_col_list = len(col_list)
 
     # set empty column names
     # dict.fromkeys(ctd_data.columns, np.arange(len(ctd_data.columns)))
@@ -586,26 +565,43 @@ def ADD_6LINEHEADER_2(dest_dir: str, year: str, cruise_number: str):
     na_value_list = ['-99', '-99', '-99', '-99', '-99', '-99', '-99', '-99', '', '-99',
                      '', '']
 
-    # Need to add to this list of lists as more spellings come up from Ruskin
-    channel_spellings = [['conductivity(mS/cm)', 'Conductivity ', 'Conductivity'],
-                         ['temperature(Â°C)', 'Temperature ', 'Temperature'],
-                         ['pressure(dbar)', 'Pressure ', 'Pressure'],
-                         ['chlorophyll(Âµg/l)', 'Chlorophyll a ', 'Chlorophyll a',
-                          'chlorophyll_a(Âµg/l)'],
-                         ['oxygensaturation(%)', 'Dissolved OÃ¢Â‚Â‚ saturation ',
-                          'Dissolved Oâ\x82\x82 saturation ', 'Dissolved O2 saturation',
-                          'Dissolved OÃ¢Â‚Â‚ saturation', 'Dissolved Oâ\x82\x82 saturation',
-                          'dissolved_o2_saturation(%)'],
-                         ['seapressure(dbar)', 'Sea pressure', 'Sea pressure ',
-                          'sea_pressure(dbar)'],
-                         ['depth(m)', 'Depth ', 'Depth'],
-                         ['salinity(PSU)', 'Salinity ', 'Salinity'],
-                         ['Cast_direction'],
-                         ['Event'],
-                         ['Date'],
-                         ['TIME:UTC']]
+    # # Need to add to this list of lists as more spellings come up from Ruskin
+    # channel_spellings = [['conductivity(mS/cm)', 'Conductivity ', 'Conductivity'],
+    #                      ['temperature(Â°C)', 'Temperature ', 'Temperature'],
+    #                      ['pressure(dbar)', 'Pressure ', 'Pressure'],
+    #                      ['chlorophyll(Âµg/l)', 'Chlorophyll a ', 'Chlorophyll a',
+    #                       'chlorophyll_a(Âµg/l)'],
+    #                      ['oxygensaturation(%)', 'Dissolved OÃ¢Â‚Â‚ saturation ',
+    #                       'Dissolved Oâ\x82\x82 saturation ', 'Dissolved O2 saturation',
+    #                       'Dissolved OÃ¢Â‚Â‚ saturation', 'Dissolved Oâ\x82\x82 saturation',
+    #                       'dissolved_o2_saturation(%)'],
+    #                      ['seapressure(dbar)', 'Sea pressure', 'Sea pressure ',
+    #                       'sea_pressure(dbar)'],
+    #                      ['depth(m)', 'Depth ', 'Depth'],
+    #                      ['salinity(PSU)', 'Salinity ', 'Salinity'],
+    #                      ['Cast_direction'],
+    #                      ['Event'],
+    #                      ['Date'],
+    #                      ['TIME:UTC']]
 
-    # Create empty lists
+    is_conductivity = lambda name: 'conductivity' in name.lower()
+    is_temperature_primary = lambda name: 'temperature' in name.lower()
+    is_pressure = lambda name: 'pressure' in name.lower() and 'sea' not in name.lower()
+    is_chlorophyll = lambda name: 'chlorophyll' in name.lower()
+    is_O2saturation = lambda name: 'saturation' in name.lower() and 'o' in name.replace('saturation', '').lower()
+    is_seapressure = lambda name: 'pressure' in name.lower() and 'sea' in name.lower()
+    is_depth = lambda name: 'depth' in name.lower()
+    is_salinity = lambda name: 'salinity' in name.lower()
+    is_castdirection = lambda name: name == 'Cast_direction'
+    is_event = lambda name: name == 'Event'
+    is_date = lambda name: name == 'Date'
+    is_time = lambda name: name == 'TIME:UTC'
+
+    is_channel_functions = [is_conductivity, is_temperature_primary, is_pressure,
+                            is_chlorophyll, is_O2saturation, is_seapressure, is_depth,
+                            is_salinity, is_castdirection, is_event, is_date, is_time]
+
+    # Create empty lists to add information of available channels to
     channel = []
     index = []
     unit = []
@@ -615,80 +611,32 @@ def ADD_6LINEHEADER_2(dest_dir: str, year: str, cruise_number: str):
 
     for col in col_list:
         for i in range(len(channel_list)):
-            if col in channel_spellings[i]:
+            if is_channel_functions[i](col):
                 channel.append(channel_list[i]), index.append(index_list[i]), unit.append(
                     unit_list[i]), input_format.append(input_format_list[i]), output_format.append(
                     output_format_list[i]), na_value.append(na_value_list[i])
 
-    # for col in col_list:
-    #     if col in ['conductivity(mS/cm)', 'Conductivity ', 'Conductivity']:
-    #         channel.append(channel_list[0]), index.append(index_list[0]), unit.append(
-    #             unit_list[0]), input_format.append(input_format_list[0]), output_format.append(
-    #             output_format_list[0]), na_value.append(na_value_list[0])
-    #     elif col in ['temperature(Â°C)', 'Temperature ', 'Temperature']:
-    #         channel.append(channel_list[1]), index.append(index_list[1]), unit.append(
-    #             unit_list[1]), input_format.append(input_format_list[1]), output_format.append(
-    #             output_format_list[1]), na_value.append(na_value_list[1])
-    #     elif col in ['pressure(dbar)', 'Pressure ', 'Pressure']:
-    #         channel.append(channel_list[2]), index.append(index_list[2]), unit.append(
-    #             unit_list[2]), input_format.append(input_format_list[2]), output_format.append(
-    #             output_format_list[2]), na_value.append(na_value_list[2])
-    #     elif col in ['chlorophyll(Âµg/l)', 'Chlorophyll a ', 'Chlorophyll a',
-    #                  'chlorophyll_a(Âµg/l)']:
-    #         channel.append(channel_list[3]), index.append(index_list[3]), unit.append(
-    #             unit_list[3]), input_format.append(input_format_list[3]), output_format.append(
-    #             output_format_list[3]), na_value.append(na_value_list[3])
-    #     elif col in ['oxygensaturation(%)', 'Dissolved OÃ¢Â‚Â‚ saturation ',
-    #                  'Dissolved Oâ\x82\x82 saturation ', 'Dissolved O2 saturation',
-    #                  'Dissolved OÃ¢Â‚Â‚ saturation', 'Dissolved Oâ\x82\x82 saturation',
-    #                  'dissolved_o2_saturation(%)']:
-    #         channel.append(channel_list[4]), index.append(index_list[4]), unit.append(
-    #             unit_list[4]), input_format.append(input_format_list[4]), output_format.append(
-    #             output_format_list[4]), na_value.append(na_value_list[4])
-    #     elif col in ['seapressure(dbar)', 'Sea pressure', 'Sea pressure ',
-    #                  'sea_pressure(dbar)']:
-    #         channel.append(channel_list[5]), index.append(index_list[5]), unit.append(
-    #             unit_list[5]), input_format.append(input_format_list[5]), output_format.append(
-    #             output_format_list[5]), na_value.append(na_value_list[5])
-    #     elif col in ['depth(m)', 'Depth ', 'Depth']:
-    #         channel.append(channel_list[6]), index.append(index_list[6]), unit.append(
-    #             unit_list[6]), input_format.append(input_format_list[6]), output_format.append(
-    #             output_format_list[6]), na_value.append(na_value_list[6])
-    #     elif col in ['salinity(PSU)', 'Salinity ', 'Salinity']:
-    #         channel.append(channel_list[7]), index.append(index_list[7]), unit.append(
-    #             unit_list[7]), input_format.append(input_format_list[7]), output_format.append(
-    #             output_format_list[7]), na_value.append(na_value_list[7])
-    #     elif col == 'Cast_direction':
-    #         channel.append(channel_list[8]), index.append(index_list[8]), unit.append(
-    #             unit_list[8]), input_format.append(input_format_list[8]), output_format.append(
-    #             output_format_list[8]), na_value.append(na_value_list[8])
-    #     elif col == 'Event':
-    #         channel.append(channel_list[9]), index.append(index_list[9]), unit.append(
-    #             unit_list[9]), input_format.append(input_format_list[9]), output_format.append(
-    #             output_format_list[9]), na_value.append(na_value_list[9])
-    #     elif col == 'Date':
-    #         channel.append(channel_list[10]), index.append(index_list[10]), unit.append(
-    #             unit_list[10]), input_format.append(input_format_list[10]), output_format.append(
-    #             output_format_list[10]), na_value.append(na_value_list[10])
-    #     elif col == 'TIME:UTC':
-    #         channel.append(channel_list[11]), index.append(index_list[11]), unit.append(
-    #             unit_list[11]), input_format.append(input_format_list[11]), output_format.append(
-    #             output_format_list[11]), na_value.append(na_value_list[11])
-
     header = pd.DataFrame([channel, index, unit, input_format, output_format, na_value])
-    # print(header[4])
-    # print(ctd_data)
     # column_names_header = dict.fromkeys(header.columns, '')  # set empty column names
     # header = header.rename(columns=column_names_header)
 
-    # If plan shapes not aligned, then may need to add another variable to drop_list
-    ctd_data_header = pd.concat((header, ctd_data))
-    ctd_data_header.to_csv(dest_dir + output_name, index=False, header=False)
+    # If plan shapes not aligned error, then may need to add another variable to channel_spellings
+    try:
+        ctd_data_header = pd.concat((header, ctd_data))
+        ctd_data_header.to_csv(dest_dir + output_name, index=False, header=False)
+        # Do a check to make sure the right columns were captured or discarded
+        if np.nan in ctd_data_header.columns:
+            print('Warning: Not all the right columns have been captured or discarded')
+            print('Output csv file data column names:', ctd_data_header.columns)
+    except ValueError as e:
+        print('If plan shapes are not aligned, then may need to add new channel name '
+              'spellings to channel_spellings list')
+        print(e.args)
 
     return
 
 
-def plot_track_location(dest_dir, year: str, cruise_number: str, left_lon=None,
+def plot_track_location(dest_dir: str, year: str, cruise_number: str, left_lon=None,
                         right_lon=None, bot_lat=None, top_lat=None):
     """
      Read in a csv file and output a map
@@ -712,12 +660,13 @@ def plot_track_location(dest_dir, year: str, cruise_number: str, left_lon=None,
     header['lon_degree'] = header['LOC:LONGITUDE'].str[:3].astype(int)
     header['lon_min'] = header['LOC:LONGITUDE'].str[4:12].astype(float)
     header['lon'] = 0 - (header['lon_degree'] + header['lon_min'] / 60)
-    event = header['LOC:STATION'].astype(str)
+    # event = header['LOC:STATION'].astype(str)
 
     lon = header['lon'].tolist()
     lat = header['lat'].tolist()
     # event = event.tolist()
 
+    # If map extent limits are not provided, then make some up based on the data
     coord_limits = [np.floor(np.min(header['lon']) * 10) / 10,
                     np.ceil(np.max(header['lon']) * 10) / 10,
                     np.floor(np.min(header['lat']) * 10) / 10,
@@ -748,13 +697,13 @@ def plot_track_location(dest_dir, year: str, cruise_number: str, left_lon=None,
     #       plt.text(xpt, ypt, event)
 
     parallels = np.arange(bot_lat, top_lat, 0.5)
-    # parallels = np.arange(48., 54, 0.2), parallels = np.linspace(bot_lat, top_lat, 10)
     m.drawparallels(parallels, labels=[True, False, True, False])  # draw parallel lat lines
     meridians = np.arange(left_lon, right_lon, 0.5)
     m.drawmeridians(meridians, labels=[False, False, False, True])
     plt.title(year + '-' + cruise_number)
     plt.tight_layout()
-    plt.savefig(os.path.join(figure_dir, 'Fig_1.png'))
+    plt.savefig(os.path.join(
+        figure_dir, f'{year}-{cruise_number}_basemap_sampling_area.png'))  # 'Fig_1.png'
     plt.close(fig)
 
     # ----- create a second map w/ Cartopy # just to double check - had an issue with Basemap once only
@@ -779,18 +728,10 @@ def plot_track_location(dest_dir, year: str, cruise_number: str, left_lon=None,
     cax = plt.scatter(x, y, transform=ccrs.PlateCarree(), marker='.', color='red', s=25)
     plt.title(year + '-' + cruise_number)
     plt.tight_layout()
-    plt.savefig(os.path.join(figure_dir, 'Figure_1.png'))
+    plt.savefig(os.path.join(
+        figure_dir, f'{year}-{cruise_number}_cartopy_sampling_area.png'))  # 'Figure_1.png'
     plt.close()
     return
-
-
-# ---------------------------- Step 5.  create variable dictionaries  ---------------------------------------
-# input: .csv file
-
-# output variables: cast cast_d, cast_u
-
-
-# -------------   step 6. Plot and Check and correct for zero-order hold   ---------------
 
 
 def PLOT_PRESSURE_DIFF(dest_dir: str, year: str, cruise_number: str, input_ext: str):
@@ -835,50 +776,7 @@ def PLOT_PRESSURE_DIFF(dest_dir: str, year: str, cruise_number: str, input_ext: 
     plt.tight_layout()
     plt.savefig(os.path.join(figure_dir, 'zero_order_holds_' + input_ext + '.png'))
     plt.close(fig)
-    # check the plot then save it as Fig_2 or Fig_3.
     return
-
-
-def check_for_zoh(dest_dir, year: str, cruise_number: str,
-                  sampling_interval: float) -> bool:
-    """
-    Compute first order differences on pressure data to determine whether
-    a correction for zero-order holds is needed.
-    From DFO Technical Report 314:
-    'The analog-to-digital (A2D) converter on RBR instruments must recalibrate once per
-    minute.'
-    inputs
-        - dest_dir: destination directory
-        - year
-        - cruise_number
-        - sampling_interval: amount of time in seconds between records
-    """
-
-    input_name = str(year) + "-" + str(cruise_number) + '_CTD_DATA-6linehdr.csv'
-    input_filename = dest_dir + input_name
-    ctd_data = pd.read_csv(input_filename, header=None, low_memory=False)
-    # assign the second row as column names
-    ctd_data = ctd_data.rename(columns=ctd_data.iloc[1])
-    ctd_data = ctd_data.rename(
-        columns={'Oxygen:Dissolved:Saturation': 'Oxygen', 'Salinity:CTD': 'Salinity',
-                 'TIME:UTC': 'TIME'})
-    ctd = ctd_data.iloc[6:]
-    ctd.index = np.arange(0, len(ctd))
-
-    pressure = ctd['Pressure'].apply(pd.to_numeric)
-    pressure_diffs = np.diff(pressure)
-
-    print('Number of pressure records:', len(pressure))
-    print('Sum of zero pressure differences:', sum(pressure_diffs == 0))
-    print('Intervals between zero pressure differences:',
-          np.diff(np.where(pressure_diffs == 0)[0]), sep='\n')
-
-    sec2min = 1 / 60  # Convert seconds to minutes b/c sampling interval in seconds
-    if sum(pressure_diffs == 0) >= np.floor(len(pressure) * sampling_interval * sec2min):
-        zoh_correction_needed = True
-    else:
-        zoh_correction_needed = False
-    return zoh_correction_needed
 
 
 def CREATE_CAST_VARIABLES(year: str, cruise_number: str, dest_dir, input_ext: str):
@@ -909,7 +807,7 @@ def CREATE_CAST_VARIABLES(year: str, cruise_number: str, dest_dir, input_ext: st
     cols = ctd.columns[0:-4]
     # cols_names = ctd.columns.tolist()
     ctd[cols] = ctd[cols].apply(pd.to_numeric, errors='coerce', axis=1)
-    ctd['Cast_direction'] = ctd['Cast_direction'].str.strip()
+    ctd['Cast_direction'] = ctd['Cast_direction'].str.strip()  # todo error
 
     # Fix the iteration to account for event numbers that aren't sequential or start at n>1
     # n = ctd['Event_number'].nunique()
@@ -941,33 +839,36 @@ def CREATE_CAST_VARIABLES(year: str, cruise_number: str, dest_dir, input_ext: st
     return var_holder, var_holder_d, var_holder_u
 
 
-# -----------------   plot data from all profiles  ------------------
-
-
-def format_profile_plot(ax, var_name, var_units, plot_title,
-                        add_legend: bool = False):
+def format_processing_plot(ax: plt.Axes, x_var_name: str, x_var_units,
+                           y_var_name: str, y_var_units: str, plot_title: str,
+                           invert_yaxis: bool, add_legend: bool = False):
     """
     inputs:
         - ax: from fig, ax = plt.subplots()
         - var_name: one of Temperature, Conductivity, Salinity,
-                    fluorescence, oxygen
+                    Fluorescence, Oxygen, Oxygen_mL_L, Oxygen_umol_kg
         - var_units: the units corresponding to the selected var_name
         - plot_title: Should indicate which processing step the plots are at
         - add_legend: If true then add a legend to the plot
     """
-    ax.invert_yaxis()
+    if invert_yaxis:
+        ax.invert_yaxis()
     ax.xaxis.set_label_position('top')
     ax.xaxis.set_ticks_position('top')
 
+    # Add ticks to top and right sides of the plot, like IOS Shell does
+    ax.tick_params(bottom=True, top=True, left=True, right=True, labelbottom=True,
+                   labeltop=True, labelleft=True, labelright=True)
+
     # For Oxygen_mL_L and Oxygen_umol_kg, remove the units at the end of the var_name
     # since the units will go in brackets after
-    var_name = var_name.split('_')[0]
+    x_var_name = x_var_name.split('_')[0]
 
-    if var_units is not None:
-        ax.set_xlabel(f'{var_name} ({var_units})')
+    if x_var_units is not None:
+        ax.set_xlabel(f'{x_var_name} ({x_var_units})')
     else:
-        ax.set_xlabel(f'{var_name}')
-    ax.set_ylabel('Pressure (decibar)')
+        ax.set_xlabel(f'{x_var_name}')
+    ax.set_ylabel(f'{y_var_name} ({y_var_units})')
     ax.set_title(plot_title, fontsize=5)
     if add_legend:
         ax.legend()
@@ -1016,7 +917,9 @@ def first_plots(year: str, cruise_number: str, dest_dir, input_ext: str):
                 # label='cast' + str(i + 1))
                 # ax.plot(cast_d['cast1'].Salinity, cast_d['cast1'].Pressure, color='blue', label='cast1')
                 # ax.plot(cast_u['cast1'].Salinity, cast_u['cast1'].Pressure, '--', color='blue', label='cast1')
-            format_profile_plot(ax, var, VARIABLE_UNITS[j], 'Pre-Processing')
+            format_processing_plot(ax, x_var_name=var, x_var_units=VARIABLE_UNITS[j],
+                                   y_var_name='Pressure', y_var_units='dbar',
+                                   plot_title='Pre-Processing', invert_yaxis=True)
             plt.savefig(os.path.join(figure_dir, f'Pre_Processing_{var[0]}.png'))
             plt.close(fig)
 
@@ -1024,13 +927,12 @@ def first_plots(year: str, cruise_number: str, dest_dir, input_ext: str):
     fig, ax = plt.subplots()
     for cast_i in cast.keys():
         ax.plot(cast_d[cast_i].Salinity, cast_d[cast_i].Temperature, color='b')
-                # label='cast' + str(i + 1))
-        # ax.plot(cast_d['cast11'].Salinity, cast_d['cast11'].Temperature, color='blue')
-    ax.set_xlabel('Salinity')
-    ax.set_ylabel('Temperature (C)')
-    ax.set_title('Pre-Processing T-S Plot')
-    # ax.legend()
-    plt.tight_layout()
+        # label='cast' + str(i + 1))
+        ax.plot(cast_u[cast_i].Salinity, cast_u[cast_i].Temperature, color='b')
+
+    format_processing_plot(ax, x_var_name='Salinity', x_var_units='PSS-78',
+                           y_var_name='Temperature', y_var_units='C',
+                           plot_title='Pre-Processing T-S Plot', invert_yaxis=False)
     plt.savefig(os.path.join(figure_dir, 'Pre_Processing_T-S.png'))
     plt.close(fig)
 
@@ -1219,8 +1121,10 @@ def first_plots(year: str, cruise_number: str, dest_dir, input_ext: str):
     #         color='blue', label='cast1')
     # ax.plot(cast_d['cast2'].Conductivity[0:10], cast_d['cast2'].Pressure[0:10],
     #         color='red', label='cast2')
-    format_profile_plot(ax, 'Conductivity', 'mS/cm',
-                        plot_title='Checking need for Pressure correction')
+    format_processing_plot(ax, x_var_name='Conductivity', x_var_units='mS/cm',
+                           y_var_name='Pressure', y_var_units='dbar',
+                           plot_title='Checking need for Pressure correction',
+                           invert_yaxis=True)
     plt.savefig(os.path.join(figure_dir, 'PressureCorrection_need_CvP.png'))
     plt.close(fig)
 
@@ -1228,24 +1132,62 @@ def first_plots(year: str, cruise_number: str, dest_dir, input_ext: str):
     for cast_i in cast.keys():
         ax.plot(cast_d[cast_i].Conductivity[0:20],
                 cast_d[cast_i].Depth[0:20], color='goldenrod')
-                # label='cast' + str(i + 1))
+        # label='cast' + str(i + 1))
         ax.plot(cast_u[cast_i].Conductivity[-20:-1],
-                cast_u[cast_i].Depth[-20:-1],
-                color='goldenrod')  # label='cast' + str(i + 1))
+                cast_u[cast_i].Depth[-20:-1], color='goldenrod')  # label='cast' + str(i + 1))
     # ax.plot(cast_d['cast1'].Conductivity[0:10], cast_d['cast1'].Depth[0:10],
     #         color='blue', label='cast1')
     # ax.plot(cast_d['cast2'].Conductivity[0:10], cast_d['cast2'].Depth[0:10],
     #         color='red', label='cast2')
-    ax.invert_yaxis()
-    ax.xaxis.set_label_position('top')
-    ax.xaxis.set_ticks_position('top')
-    ax.set_xlabel('Conductivity (mS/cm)')
-    ax.set_ylabel('Depth (m)')
-    ax.set_title('Checking need for Pressure correction')
-    plt.tight_layout()
+    format_processing_plot(ax, x_var_name='Conductivity', x_var_units='mS/cm',
+                           y_var_name='Depth', y_var_units='m',
+                           plot_title='Checking need for Pressure correction',
+                           invert_yaxis=True)
     plt.savefig(os.path.join(figure_dir, 'PressureCorrection_need_CvD.png'))
     plt.close(fig)
     return
+
+
+def check_for_zoh(dest_dir, year: str, cruise_number: str,
+                  sampling_interval: float) -> bool:
+    """
+    Compute first order differences on pressure data to determine whether
+    a correction for zero-order holds is needed.
+    From DFO Technical Report 314:
+    'The analog-to-digital (A2D) converter on RBR instruments must recalibrate once per
+    minute.'
+    inputs
+        - dest_dir: destination directory
+        - year
+        - cruise_number
+        - sampling_interval: amount of time in seconds between records
+    """
+
+    input_name = str(year) + "-" + str(cruise_number) + '_CTD_DATA-6linehdr.csv'
+    input_filename = dest_dir + input_name
+    ctd_data = pd.read_csv(input_filename, header=None, low_memory=False)
+    # assign the second row as column names
+    ctd_data = ctd_data.rename(columns=ctd_data.iloc[1])
+    ctd_data = ctd_data.rename(
+        columns={'Oxygen:Dissolved:Saturation': 'Oxygen', 'Salinity:CTD': 'Salinity',
+                 'TIME:UTC': 'TIME'})
+    ctd = ctd_data.iloc[6:]
+    ctd.index = np.arange(0, len(ctd))
+
+    pressure = ctd['Pressure'].apply(pd.to_numeric)
+    pressure_diffs = np.diff(pressure)
+
+    print('Number of pressure records:', len(pressure))
+    print('Sum of zero pressure differences:', sum(pressure_diffs == 0))
+    print('Intervals between zero pressure differences:',
+          np.diff(np.where(pressure_diffs == 0)[0]), sep='\n')
+
+    sec2min = 1 / 60  # Convert seconds to minutes b/c sampling interval in seconds
+    if sum(pressure_diffs == 0) >= np.floor(len(pressure) * sampling_interval * sec2min):
+        zoh_correction_needed = True
+    else:
+        zoh_correction_needed = False
+    return zoh_correction_needed
 
 
 def CORRECT_HOLD(dest_dir: str, year: str, cruise_number: str, metadata_dict: dict):
@@ -1278,7 +1220,7 @@ def CORRECT_HOLD(dest_dir: str, year: str, cruise_number: str, metadata_dict: di
     header = ctd_data.iloc[0:6]  # keep the header to use at the end
     ctd = ctd_data.iloc[6:]
     ctd = ctd.copy()
-    vars_available = list(dict.fromkeys(ctd))
+    # vars_available = list(dict.fromkeys(ctd))
     # print(vars_available)
     # cols = ctd.columns[0:-4]
     # ctd[cols] = ctd[cols].apply(pd.to_numeric, errors='coerce', axis=1)
@@ -1383,7 +1325,7 @@ def CALIB(var: dict, var_downcast: dict, var_upcast: dict, metadata_dict: dict,
      Outputs:
          - cast, downcast, upcast and metadata dictionaries after pressure correction
      """
-    n = len(var.keys())
+    # n = len(var.keys())
     var1 = deepcopy(var)
     var2 = deepcopy(var_downcast)
     var3 = deepcopy(var_upcast)
@@ -1403,19 +1345,16 @@ def CALIB(var: dict, var_downcast: dict, var_upcast: dict, metadata_dict: dict,
     metadata_dict['Processing_history'] += '-CALIB parameters:|' \
                                            ' Calibration type = Correct|' \
                                            ' Calibrations applied:|' \
-                                           ' Pressure (decibar) = {}|'.format(str(pd_correction_value)) + \
-                                           ' Depth (meters) = {}'.format(str(pd_correction_value)) + '|'
+                                           f' Pressure (decibar) = {pd_correction_value}|'\
+                                           f' Depth (meters) = {pd_correction_value}|'
 
     metadata_dict['CALIB_Time'] = datetime.now()
 
     return var1, var2, var3
 
 
-# ------------------------------  Step 8: Data Despiking  ----------------------------------
-# plot profiles to look for spikes - not encountered yet
+# Data despiking has not been implemented before clipping.
 
-
-# ------------------------------  Step 9: Clip   -------------------------------------------
 
 def CLIP_CAST(var: dict, metadata_dict: dict, limit_pressure_change: float,
               cast_direction: str):
@@ -1561,32 +1500,39 @@ def CLIP_CAST(var: dict, metadata_dict: dict, limit_pressure_change: float,
 # cast_u_clip = CLIP_UPCAST(cast_u_pc, metadata, limit_rise = -0.02)
 
 
-# Plot to check the profiles after clip by cast
-def plot_clip(cast_d_clip: dict, cast_d_pc: dict, dest_dir):
-    """ plot the clipped casts to make sure they are OK"""
+def plot_clip(cast_d_clip: dict, cast_d_pc: dict, dest_dir: str):
+    """ plot the clipped casts to check that the clipping worked"""
 
     # Create a folder for figures if it doesn't already exist
     figure_dir = os.path.join(dest_dir, 'FIG')
     if not os.path.exists(figure_dir):
         os.makedirs(figure_dir)
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots()  # Before
     for cast_i in cast_d_pc.keys():
         ax.plot(cast_d_pc[cast_i].TIME, cast_d_pc[cast_i].Pressure,
                 color='blue')
+        # ax.plot(cast_u_pc[cast_i].TIME, cast_u_pc[cast_i].Pressure,
+        #         color='blue')
     xticks = ax.get_xticks()
-    ax.set_xticks(ticks=xticks[::300])
-    format_profile_plot(ax, var_name='Time', var_units=None, plot_title='Before Clip')
+    ax.set_xticks(ticks=xticks[::300])  # Make ticks farther apart
+    format_processing_plot(ax, x_var_name='Time', x_var_units=None,
+                           y_var_name='Pressure', y_var_units='dbar',
+                           plot_title='Downcasts before clip', invert_yaxis=True)
     plt.savefig(os.path.join(figure_dir, 'Before_Clip_P_vs_t.png'))
     plt.close(fig)
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots()  # After
     for cast_i in cast_d_pc.keys():
         ax.plot(cast_d_clip[cast_i].TIME, cast_d_clip[cast_i].Pressure,
                 color='blue')
+        # ax.plot(cast_u_clip[cast_i].TIME, cast_u_clip[cast_i].Pressure,
+        #         color='blue')
     xticks = ax.get_xticks()
     ax.set_xticks(ticks=xticks[::300])
-    format_profile_plot(ax, var_name='Time', var_units=None, plot_title='After Clip')
+    format_processing_plot(ax, x_var_name='Time', x_var_units=None,
+                           y_var_name='Pressure', y_var_units='dbar',
+                           plot_title='Downcasts after clip', invert_yaxis=True)
     plt.savefig(os.path.join(figure_dir, 'After_Clip_P_vs_t.png'))
     plt.close(fig)
 
@@ -1642,7 +1588,7 @@ def FILTER(var_downcast: dict, var_upcast: dict, metadata_dict: dict,
          - two dictionaries containing downcast and upcast profiles after applying filter
      """
 
-    cast_number = len(var_downcast.keys())
+    # cast_number = len(var_downcast.keys())
     if filter_type == 0:
         Wn = (1.0 / time_constant) / (sample_rate * 2)
         # Numerator (b) and denominator (a) polynomials of the IIR filter
@@ -1673,9 +1619,9 @@ def FILTER(var_downcast: dict, var_upcast: dict, metadata_dict: dict,
                 b, a, var2[cast_i].Fluorescence)
 
     metadata_dict['Processing_history'] += '-FILTER parameters:|' \
-                                           ' ' + filter_name + ' was used.|' \
-                                           ' Filter width = {}'.format(str(window_width)) + '.|' \
-                                           ' The following channel(s) were filtered.|' \
+                                           f' {filter_name} was used.|' \
+                                           f' Filter width = {window_width}.|' \
+                                           'The following channel(s) were filtered.|' \
                                            ' Pressure|' \
                                            ' Temperature|' \
                                            ' Conductivity|'
@@ -1687,13 +1633,10 @@ def FILTER(var_downcast: dict, var_upcast: dict, metadata_dict: dict,
     return var1, var2
 
 
-# plot to check values before and after filtering
-def plot_filter(cast_d_filtered: dict, cast_d_clip: dict, dest_dir, have_fluor: bool):
-    """ check the filter plots
-    VARIABLES_POSSIBLE = ['Salinity', 'Temperature', 'Conductivity', 'Oxygen', 'Fluorescence']
-    VARIABLE_UNITS = ['PSS-78', 'C', 'mS/cm', '%', 'ug/L']
-    VARIABLE_COLOURS = ['b', 'r', 'goldenrod', 'k', 'g']
-    """
+def plot_filter(cast_d_filtered: dict, cast_u_filtered: dict,
+                cast_d_clip: dict, cast_u_clip: dict, dest_dir: str,
+                have_fluor: bool):
+    """ Make plots to show channel values before and after filtering"""
 
     # Create a folder for figures if it doesn't already exist
     figure_dir = os.path.join(dest_dir, 'FIG')
@@ -1701,7 +1644,7 @@ def plot_filter(cast_d_filtered: dict, cast_d_clip: dict, dest_dir, have_fluor: 
         os.makedirs(figure_dir)
 
     # vars_available = list(dict.fromkeys(cast_d_filtered['cast1']))
-    n_casts = len(cast_d_filtered)
+    # n_casts = len(cast_d_filtered)
 
     filtered_vars = ['Temperature', 'Conductivity']
     units = [VARIABLE_UNITS[1], VARIABLE_UNITS[2]]
@@ -1711,23 +1654,33 @@ def plot_filter(cast_d_filtered: dict, cast_d_clip: dict, dest_dir, have_fluor: 
         units.append(VARIABLE_UNITS[4])
         colours.append(VARIABLE_COLOURS[4])
 
-    for j, var in enumerate(filtered_vars):
+    for j, var in enumerate(filtered_vars):  # Before
         fig, ax = plt.subplots()
         for cast_i in cast_d_clip.keys():
             ax.plot(cast_d_clip[cast_i].loc[:, var],
                     cast_d_clip[cast_i].loc[:, 'Pressure'],
                     color=colours[j])
-        format_profile_plot(ax, var, units[j], 'Pre-Filter')
+            ax.plot(cast_u_clip[cast_i].loc[:, var],
+                    cast_u_clip[cast_i].loc[:, 'Pressure'],
+                    color=colours[j])
+        format_processing_plot(ax, x_var_name=var, x_var_units=units[j],
+                               y_var_name='Pressure', y_var_units='dbar',
+                               plot_title='Pre-Filter', invert_yaxis=True)
         plt.savefig(os.path.join(figure_dir, f'Pre_Filter_{var[0]}.png'))
         plt.close(fig)
 
-    for j, var in enumerate(filtered_vars):
+    for j, var in enumerate(filtered_vars):  # After
         fig, ax = plt.subplots()
         for cast_i in cast_d_clip.keys():
             ax.plot(cast_d_filtered[cast_i].loc[:, var],
                     cast_d_filtered[cast_i].loc[:, 'Pressure'],
                     color=colours[j])
-        format_profile_plot(ax, var, units[j], 'Post-Filter')
+            ax.plot(cast_u_filtered[cast_i].loc[:, var],
+                    cast_u_filtered[cast_i].loc[:, 'Pressure'],
+                    color=colours[j])
+        format_processing_plot(ax, x_var_name=var, x_var_units=units[j],
+                               y_var_name='Pressure', y_var_units='dbar',
+                               plot_title='Post-Filter', invert_yaxis=True)
         plt.savefig(os.path.join(figure_dir, f'Post_Filter_{var[0]}.png'))
         plt.close(fig)
 
@@ -1735,7 +1688,6 @@ def plot_filter(cast_d_filtered: dict, cast_d_clip: dict, dest_dir, have_fluor: 
 
 
 # ------------------ Step 11: Shift conductivity and recalculate salinity ----------------------
-# input variable: cast_d_filtered, cast_u_filtered, try 2-3s (12-18 scans)
 
 def SHIFT_CONDUCTIVITY(var_downcast: dict, var_upcast: dict,
                        metadata_dict: dict, shifted_scan_number=2):
@@ -1747,7 +1699,7 @@ def SHIFT_CONDUCTIVITY(var_downcast: dict, var_upcast: dict,
      Outputs:
          - two dictionaries containing downcast and upcast profiles
      """
-    cast_number = len(var_downcast.keys())
+    # cast_number = len(var_downcast.keys())
     var1 = deepcopy(var_downcast)
     var2 = deepcopy(var_upcast)
     # Apply the shift to each cast
@@ -1772,14 +1724,15 @@ def SHIFT_CONDUCTIVITY(var_downcast: dict, var_upcast: dict,
     metadata_dict['Processing_history'] += '-SHIFT parameters:|' \
                                            ' Shift Channel: Conductivity|' \
                                            ' # of Records to Delay (-ve for Advance):|' \
-                                           ' Shift = {}'.format(str(shifted_scan_number)) + '|' \
+                                           f' Shift = {shifted_scan_number}|' \
                                            ' Salinity was recalculated after shift|'
     metadata_dict['SHIFT_Conductivity_Time'] = datetime.now()
 
     return var1, var2
 
 
-def plot_shift_c(cast_d_shift_c: dict, cast_d_filtered: dict, dest_dir):
+def plot_shift_c(cast_d_shift_c: dict, cast_u_shift_c: dict,
+                 cast_d_filtered: dict, cast_u_filtered: dict, dest_dir: str):
     """
     Plot Salinity and T-S to check the index after shift
     inputs:
@@ -1792,15 +1745,17 @@ def plot_shift_c(cast_d_shift_c: dict, cast_d_filtered: dict, dest_dir):
     if not os.path.exists(figure_dir):
         os.makedirs(figure_dir)
 
-    num_casts = len(cast_d_filtered)
+    # num_casts = len(cast_d_filtered)
 
     fig, ax = plt.subplots()  # Before
     for cast_i in cast_d_filtered.keys():
         ax.plot(cast_d_filtered[cast_i].Salinity,
                 cast_d_filtered[cast_i].Pressure, color='blue')
-        # ax.plot(cast_u_filtered['cast1'].Salinity, cast_u_filtered['cast1'].Pressure,
-        #         '--', color='blue', label='Pre-shift')
-    format_profile_plot(ax, 'Salinity', 'PSS-78', 'Before Shift Conductivity')
+        ax.plot(cast_u_filtered[cast_i].Salinity,
+                cast_u_filtered[cast_i].Pressure, color='blue')
+    format_processing_plot(ax, x_var_name='Salinity', x_var_units='PSS-78',
+                           y_var_name='Pressure', y_var_units='dbar',
+                           plot_title='Before Shift Conductivity', invert_yaxis=True)
     plt.savefig(os.path.join(figure_dir, 'Before_Shift_Conductivity_S.png'))
     plt.close(fig)
 
@@ -1808,9 +1763,11 @@ def plot_shift_c(cast_d_shift_c: dict, cast_d_filtered: dict, dest_dir):
     for cast_i in cast_d_filtered.keys():
         ax.plot(cast_d_shift_c[cast_i].Salinity,
                 cast_d_shift_c[cast_i].Pressure, color='blue')
-        # ax.plot(cast_u_shift_c['cast1'].Salinity, cast_u_shift_c['cast1'].Pressure,
-        #         '--', color='red', label='Post-shift')
-    format_profile_plot(ax, 'Salinity', 'PSS-78', 'After Shift Conductivity')
+        ax.plot(cast_u_shift_c[cast_i].Salinity,
+                cast_u_shift_c[cast_i].Pressure, color='blue')
+    format_processing_plot(ax, x_var_name='Salinity', x_var_units='PSS-78',
+                           y_var_name='Pressure', y_var_units='dbar',
+                           plot_title='After Shift Conductivity', invert_yaxis=True)
     plt.savefig(os.path.join(figure_dir, 'After_Shift_Conductivity_S.png'))
     plt.close(fig)
 
@@ -1822,15 +1779,14 @@ def plot_shift_c(cast_d_shift_c: dict, cast_d_filtered: dict, dest_dir):
         # ax.plot(cast_u_filtered['cast1'].Salinity, cast_u_filtered['cast1'].Temperature,
         #         '--', color='blue',
         # label='Pre-shift')
-    ax.set_xlabel('Salinity')
-    ax.set_ylabel('Temperature (C)')
-    ax.set_title('Before Shift Conductivity T-S Plot')
-    # ax.legend()
-    plt.tight_layout()
+    format_processing_plot(ax, x_var_name='Salinity', x_var_units='PSS-78',
+                           y_var_name='Temperature', y_var_units='C',
+                           plot_title='Before Shift Conductivity T-S Plot',
+                           invert_yaxis=False)
     plt.savefig(os.path.join(figure_dir, 'Before_Shift_Conductivity_T-S.png'))
     plt.close(fig)
 
-    # After
+    # T-S plot After
     fig, ax = plt.subplots()
     for cast_i in cast_d_filtered.keys():
         ax.plot(cast_d_shift_c[cast_i].Salinity,
@@ -1838,11 +1794,10 @@ def plot_shift_c(cast_d_shift_c: dict, cast_d_filtered: dict, dest_dir):
         # ax.plot(cast_u_shift_c['cast1'].Salinity, cast_u_shift_c['cast1'].Temperature,
         #         '--', color='red',
         # label='Post-shift')
-    ax.set_xlabel('Salinity')
-    ax.set_ylabel('Temperature (C)')
-    ax.set_title('After Shift Conductivity T-S Plot')
-    # ax.legend()
-    plt.tight_layout()
+    format_processing_plot(ax, x_var_name='Salinity', x_var_units='PSS-78',
+                           y_var_name='Temperature', y_var_units='C',
+                           plot_title='After Shift Conductivity T-S Plot',
+                           invert_yaxis=False)
     plt.savefig(os.path.join(figure_dir, 'After_Shift_Conductivity_T-S.png'))
     plt.close(fig)
 
@@ -1879,7 +1834,7 @@ def SHIFT_OXYGEN(var_downcast: dict, var_upcast: dict,
     metadata_dict['Processing_history'] += '-SHIFT parameters:|' \
                                            ' Shift Channel: Oxygen:Dissolved:Saturation|' \
                                            ' # of Records to Delay (-ve for Advance):|' \
-                                           ' Shift = {}'.format(str(shifted_scan_number)) + '|'
+                                           f' Shift = {shifted_scan_number}|'
     metadata_dict['SHIFT_Oxygen_Time'] = datetime.now()
 
     return var1, var2
@@ -1887,38 +1842,43 @@ def SHIFT_OXYGEN(var_downcast: dict, var_upcast: dict,
 
 def plot_shift_o(cast_d_shift_o: dict, cast_u_shift_o: dict,
                  cast_d_shift_c: dict, cast_u_shift_c: dict, dest_dir):
-    """Check Oxy plots after shift """
+    """Check Oxy plots after shift. Plot temperature vs oxygen saturation
+    before and after the shift to confirm that the alignment has improved"""
 
     # Create a folder for figures if it doesn't already exist
     figure_dir = os.path.join(dest_dir, 'FIG')
     if not os.path.exists(figure_dir):
         os.makedirs(figure_dir)
 
-    num_casts = len(cast_d_shift_o)
+    # num_casts = len(cast_d_shift_o)
 
+    # Before shift
     fig, ax = plt.subplots()
     for cast_i in cast_d_shift_c.keys():
         ax.plot(cast_d_shift_c[cast_i].Oxygen,
                 cast_d_shift_c[cast_i].Temperature, color='blue')
         ax.plot(cast_u_shift_c[cast_i].Oxygen,
                 cast_u_shift_c[cast_i].Temperature, color='blue')
-    ax.set_ylabel('Oxygen Saturation (%)')
-    ax.set_xlabel('Temperature (C)')
-    ax.set_title('Before Shift Oxygen T-O Plot')
-    plt.tight_layout()
+
+    format_processing_plot(ax, x_var_name='Oxygen', x_var_units='%',
+                           y_var_name='Temperature', y_var_units='C',
+                           plot_title='Before Shift Oxygen T-O Plot',
+                           invert_yaxis=False)
     plt.savefig(os.path.join(figure_dir, 'Before_Shift_Oxygen_T-O.png'))
     plt.close(fig)
 
+    # After shift
     fig, ax = plt.subplots()
     for cast_i in cast_d_shift_c.keys():
         ax.plot(cast_d_shift_o[cast_i].Oxygen,
                 cast_d_shift_o[cast_i].Temperature, color='blue')
         ax.plot(cast_u_shift_o[cast_i].Oxygen,
                 cast_u_shift_o[cast_i].Temperature, color='blue')
-    ax.set_ylabel('Oxygen Saturation (%)')
-    ax.set_xlabel('Temperature (C)')
-    ax.set_title('After Shift Oxygen T-O Plot')
-    plt.tight_layout()
+
+    format_processing_plot(ax, x_var_name='Oxygen', x_var_units='%',
+                           y_var_name='Temperature', y_var_units='C',
+                           plot_title='After Shift Oxygen T-O Plot',
+                           invert_yaxis=False)
     plt.savefig(os.path.join(figure_dir, 'After_Shift_Oxygen_T-O.png'))
     plt.close(fig)
     return
@@ -1939,7 +1899,7 @@ def DERIVE_OXYGEN_CONCENTRATION(var_downcast: dict, var_upcast: dict,
     """
     umol_L_to_mL_L = 1 / 44.6596
     m3_to_L = 1e3
-    cast_number = len(var_downcast.keys())
+    # cast_number = len(var_downcast.keys())
     var1 = deepcopy(var_downcast)
     var2 = deepcopy(var_upcast)
 
@@ -2171,8 +2131,10 @@ def plot_delete(cast_d_wakeeffect: dict, cast_d_shift_o: dict, dest_dir: str):
                 ax.plot(cast_d_shift_o[cast_i].loc[:, var],
                         cast_d_shift_o[cast_i].Pressure,
                         color=VARIABLE_COLOURS[j])
-            format_profile_plot(ax, var, VARIABLE_UNITS[j],
-                                plot_title='Before Delete')
+            format_processing_plot(ax, x_var_name=var, x_var_units=VARIABLE_UNITS[j],
+                                   y_var_name='Pressure', y_var_units='dbar',
+                                   plot_title='Before Delete', invert_yaxis=True)
+
             if len(var.split('_')) > 1:
                 var_abbrev = var[0] + '_' + var.split('_')[1] + '_' + var.split('_')[2]
             else:
@@ -2188,8 +2150,9 @@ def plot_delete(cast_d_wakeeffect: dict, cast_d_shift_o: dict, dest_dir: str):
                 ax.plot(cast_d_wakeeffect[cast_i].loc[:, var],
                         cast_d_wakeeffect[cast_i].Pressure,
                         color=VARIABLE_COLOURS[j])
-            format_profile_plot(ax, var, VARIABLE_UNITS[j],
-                                plot_title='After Delete')
+            format_processing_plot(ax, x_var_name=var, x_var_units=VARIABLE_UNITS[j],
+                                   y_var_name='Pressure', y_var_units='dbar',
+                                   plot_title='After Delete', invert_yaxis=True)
             if len(var.split('_')) > 1:
                 # Capture derived oxygen concentration without overwriting O sat plot
                 var_abbrev = var[0] + '_' + var.split('_')[1] + '_' + var.split('_')[2]
@@ -2203,11 +2166,10 @@ def plot_delete(cast_d_wakeeffect: dict, cast_d_shift_o: dict, dest_dir: str):
     for cast_i in cast_d_shift_o.keys():
         ax.plot(cast_d_shift_o[cast_i].Salinity,
                 cast_d_shift_o[cast_i].Temperature, color='blue')
-    ax.set_xlabel('Salinity')
-    ax.set_ylabel('Temperature (C)')
-    ax.set_title('T-S Plot (before delete pressure reversal)')
-    ax.legend()
-    plt.tight_layout()
+    format_processing_plot(ax, x_var_name='Salinity', x_var_units='PSS-78',
+                           y_var_name='Temperature', y_var_units='C',
+                           plot_title='T-S Plot (before delete pressure reversal)',
+                           invert_yaxis=False)
     plt.savefig(os.path.join(figure_dir, 'Before_Delete_T-S.png'))
     plt.close(fig)
 
@@ -2215,11 +2177,10 @@ def plot_delete(cast_d_wakeeffect: dict, cast_d_shift_o: dict, dest_dir: str):
     for cast_i in cast_d_wakeeffect.keys():
         ax.plot(cast_d_wakeeffect[cast_i].Salinity,
                 cast_d_wakeeffect[cast_i].Temperature, color='blue')
-    ax.set_xlabel('Salinity')
-    ax.set_ylabel('Temperature (C)')
-    ax.set_title('T-S Plot (after delete pressure reversal)')
-    ax.legend()
-    plt.tight_layout()
+    format_processing_plot(ax, x_var_name='Salinity', x_var_units='PSS-78',
+                           y_var_name='Temperature', y_var_units='C',
+                           plot_title='T-S Plot (after delete pressure reversal)',
+                           invert_yaxis=False)
     plt.savefig(os.path.join(figure_dir, 'After_Delete_T-S.png'))
     plt.close(fig)
     return
@@ -2363,7 +2324,7 @@ def FINAL_EDIT(var_cast: dict, have_oxy: bool, have_fluor: bool,
 
 
 def plot_processed(cast_final: dict, dest_dir: str):
-    """Final plots: Plot the processed casts after removing pressure reversals
+    """Final plots: Plot the processed casts after bin averaging
     inputs:
         - cast_final: output from FINAL_EDIT() function
 
@@ -2376,22 +2337,28 @@ def plot_processed(cast_final: dict, dest_dir: str):
     for cast_i in cast_final.keys():
         vars_available = list(dict.fromkeys(cast_final[cast_i]))
         break
-    # num_casts = len(cast_final)
 
     # -------------------------  Plot processed profiles ------------------------------
     # number_of_colors = len(cast)
     # color = ["#" + ''.join([random.choice('0123456789ABCDEF') for j in range(6)])
     #          for i in range(number_of_colors)]
 
+    # Change conductivity units from mS/cm to agree with FINAL_EDIT()
+    variable_units_final = VARIABLE_UNITS
+    variable_units_final[2] = 'S/m'
+
     # Plot the first cast before and after processing
     for j, var in enumerate(VARIABLES_POSSIBLE):
         if var in vars_available:
             fig, ax = plt.subplots()
             for cast_i in cast_final.keys():
-                ax.plot(cast_final[cast_i].loc[:, var],
-                        cast_final[cast_i].Pressure,
+                # Need to convert to float because FINAL_EDIT() converted values to strings
+                ax.plot(cast_final[cast_i].loc[:, var].astype(float),
+                        cast_final[cast_i].Pressure.astype(float),
                         color=VARIABLE_COLOURS[j])
-            format_profile_plot(ax, var, VARIABLE_UNITS[j], 'Post Processing')
+            format_processing_plot(ax, x_var_name=var, x_var_units=variable_units_final[j],
+                                   y_var_name='Pressure', y_var_units='dbar',
+                                   plot_title='Post-Processing', invert_yaxis=True)
             if len(var.split('_')) > 1:
                 # Capture derived oxygen concentration without overwriting O sat plot: O_ml_l and O_umol_kg
                 var_abbrev = var[0] + '_' + var.split('_')[1] + '_' + var.split('_')[2]
@@ -2403,12 +2370,11 @@ def plot_processed(cast_final: dict, dest_dir: str):
     # T-S plot
     fig, ax = plt.subplots()
     for cast_i in cast_final.keys():
-        ax.plot(cast_final[cast_i].Salinity,
-                cast_final[cast_i].Temperature, color='blue')
-    ax.set_xlabel('Salinity')
-    ax.set_ylabel('Temperature (C)')
-    ax.set_title('Post Processing T-S Plot')
-    plt.tight_layout()
+        ax.plot(cast_final[cast_i].Salinity.astype(float),
+                cast_final[cast_i].Temperature.astype(float), color='blue')
+    format_processing_plot(ax, x_var_name='Salinity', x_var_units='PSS-78',
+                           y_var_name='Temperature', y_var_units='C',
+                           plot_title='Post-Processing T-S Plot', invert_yaxis=False)
     plt.savefig(os.path.join(figure_dir, 'Post_Processing_T-S.png'))
     plt.close(fig)
     return
@@ -3002,8 +2968,8 @@ def main_header(dest_dir, n_cast: int, metadata_dict: dict, cast: dict,
         write_instrument(metadata_dict=metadata_dict)
         write_history(have_oxy, cast_d, cast_d_clip, cast_d_filtered,
                       cast_d_shift_c, cast_d_shift_o, cast_d_o_conc,
-                      cast_d_wakeeffect, cast_d_binned, cast_d_final, cast_number=n_cast,
-                      metadata_dict=metadata_dict)
+                      cast_d_wakeeffect, cast_d_binned, cast_d_final,
+                      cast_number=n_cast, metadata_dict=metadata_dict)
         write_comments(have_fluor, have_oxy, processing_report_name)  # , metadata_dict=meta_data, cast_d=cast_d)
         write_data(have_fluor, have_oxy, cast_d_final, cast_number=n_cast)  # , cast_d=cast_d)
         sys.stdout.flush()  # Recommended by Tom
@@ -3030,16 +2996,24 @@ def get_started(dest_dir):
     for k in range(n_files):
         filename = str(dest_dir) + str(files[k])  # full path and name of .rsk file
         print(filename)
-        rsk = pyrsktools.open(filename)  # load up an RSK
+        rsk = pyrsktools.RSK(filename)  # load up an RSK
+        rsk.open()
+        rsk.readdata()
 
         # check the number of profiles
-        n_profiles = len(list(rsk.profiles()))  # get the number of profiles recorded
+        try:
+            downcastIndices = rsk.getprofilesindices(direction="down")
+        except AttributeError:
+            rsk.computeprofiles()  # This should fix the problem
+            downcastIndices = rsk.getprofilesindices(direction="down")
+
+        n_profiles = len(downcastIndices)  # get the number of profiles recorded
 
         # last_profile = n_profiles[:-1] # get the last profile only
-        last_profile = list(rsk.profiles())[:-1]
-        print(n_profiles)
-        print(rsk.samples)
-        print(list(rsk.channels.items()))
+        # last_profile = list(rsk.profiles())[:-1]
+        print('Number of profiles:', n_profiles)
+        print('Samples:\n', rsk.samples)
+        print('Channel items:\n', list(rsk.channels.items()))
 
     return
 
@@ -3174,17 +3148,19 @@ def second_step(dest_dir: str, year: str, cruise_number: str,
     # Apply a low-pass filter
     # metadata_dict['Sampling_Interval']: time in seconds between records
     # (0.125-0.167s for an 8-6Hz instrument)
+    sample_rate = int(np.round(1 / float(metadata_dict['Sampling_Interval'])))
     cast_d_filtered, cast_u_filtered = FILTER(
         cast_d_clip, cast_u_clip, metadata_dict, have_fluor, window_width,
-        sample_rate=int(np.round(1 / float(metadata_dict['Sampling_Interval']))),
+        sample_rate=sample_rate,
         time_constant=float(metadata_dict['Sampling_Interval']),
         filter_type=filter_type)  # n = 5 should be good.
 
     # Plot the filtered data
-    plot_filter(cast_d_filtered, cast_d_clip, dest_dir, have_fluor)
+    plot_filter(cast_d_filtered, cast_u_filtered, cast_d_clip, cast_u_clip,
+                dest_dir, have_fluor)
 
     if verbose:
-        print('Casts filtered')
+        print(f'Casts filtered, assuming a sample rate of {sample_rate} records per second')
 
     # Shift the conductivity channel and recalculate salinity after
     # Default conductivity shift is a delay by 2 scans
@@ -3192,10 +3168,11 @@ def second_step(dest_dir: str, year: str, cruise_number: str,
         cast_d_filtered, cast_u_filtered, metadata_dict=metadata_dict,
         shifted_scan_number=shift_recs_conductivity)
 
-    plot_shift_c(cast_d_shift_c, cast_d_filtered, dest_dir)
+    plot_shift_c(cast_d_shift_c, cast_u_shift_c, cast_d_filtered, cast_u_filtered,
+                 dest_dir)
 
     if verbose:
-        print(f'Conductivity shifted {-shift_recs_conductivity} scans')
+        print(f'Conductivity shifted {shift_recs_conductivity} scans')
 
     # Shift oxygen channel if available, then calculate oxygen concentration
     if have_oxy:
@@ -3207,7 +3184,7 @@ def second_step(dest_dir: str, year: str, cruise_number: str,
                      cast_u_shift_c, dest_dir)
 
         if verbose:
-            print(f'Oxygen shifted {-shift_recs_oxygen} scans')
+            print(f'Oxygen shifted {shift_recs_oxygen} scans')
 
         # Add cast variables of oxygen conc. in ml/l and umol/kg
         cast_d_o_conc, cast_u_o_conc = DERIVE_OXYGEN_CONCENTRATION(
@@ -3228,7 +3205,7 @@ def second_step(dest_dir: str, year: str, cruise_number: str,
         print('Deleted pressure change reversals')
 
     # Plot before and after comparisons of the delete step
-    plot_processed(cast_d_wakeeffect, dest_dir)  # cast_d_o_conc, cast_d, cast,
+    plot_delete(cast_d_wakeeffect, cast_d_o_conc, dest_dir)
 
     # Average the data into 1-dbar bins
     cast_d_binned, cast_u_binned = BINAVE(cast_d_wakeeffect, cast_u_wakeeffect,
@@ -3242,6 +3219,10 @@ def second_step(dest_dir: str, year: str, cruise_number: str,
 
     if verbose:
         print('Final edit completed')
+
+    # Final plots after bin averaging
+    # print(cast_d_final)
+    plot_processed(cast_d_final, dest_dir)  # cast_d_o_conc, cast_d, cast,
 
     # # Produce the IOS Shell header files containing the final data
     # main_header(dest_dir, n_cast,
@@ -3298,17 +3279,17 @@ def PROCESS_RBR(dest_dir, year: str, cruise_number: str,
 
 
 def test_process():
-    test_year = '2022'
-    test_cruise_num = '025'
-    test_file = '201172_20220925_1059.rsk'
-    # num_profiles = 6
-    skipcasts = 0
+    # test_year = '2022'
+    # test_cruise_num = '025'
+    # test_file = '201172_20220925_1059.rsk'
+    # # num_profiles = 6
+    # skipcasts = 0
 
-    # test_year = '2023'
-    # test_cruise_num = '015'
-    # test_file = '208765_20230121_2113_newDOcoefficients.rsk'
+    test_year = '2023'
+    test_cruise_num = '015'
+    test_file = '208765_20230121_2113_newDOcoefficients.rsk'
     # num_profiles = 44
-    # skipcasts = 54  # First 53 casts from an earlier cruise + 1 cast with error
+    skipcasts = 54  # First 53 casts from an earlier cruise + 1 cast with error
 
     # test_year = '2022'  # Issue with rsk.open() on files from this cruise
     # test_cruise_num = '031'
@@ -3327,13 +3308,13 @@ def test_process():
     # first_step(test_dir, test_year, test_cruise_num, test_event_start, 'ALL', 'rsk',
     #            num_profiles)
 
-    # second_step(test_dir, test_year, test_cruise_num, processing_report_name,
-    #             test_file, window_width=3, filter_type=1, verbose=True)
+    second_step(test_dir, test_year, test_cruise_num, processing_report_name,
+                test_file, window_width=3, filter_type=1, verbose=True)
 
-    PROCESS_RBR(test_dir, test_year, test_cruise_num,
-                processing_report_name=processing_report_name, rsk_file=test_file,
-                data_file_type='rsk', skipcasts=skipcasts,
-                window_width=3, shift_recs_conductivity=2,  # sample_rate=8, time_constant=1 / 8,
-                shift_recs_oxygen=-11, verbose=True)
+    # PROCESS_RBR(test_dir, test_year, test_cruise_num,
+    #             processing_report_name=processing_report_name, rsk_file=test_file,
+    #             data_file_type='rsk', skipcasts=skipcasts,
+    #             window_width=3, shift_recs_conductivity=2,  # sample_rate=8, time_constant=1 / 8,
+    #             shift_recs_oxygen=-11, verbose=True)
 
     return
