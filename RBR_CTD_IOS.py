@@ -5,7 +5,7 @@ about: This script is for processing RBR CTD data and producing .ctd files in IO
 
 Modified July 2021 - September 2021 by Samantha Huntington
 
-Modified Mar. 2023 - ___ by Hana Hourston @hhourston
+Modified Jan. 2023 - ___ by Hana Hourston @hhourston
 """
 # globals().clear()
 import cartopy.crs as ccrs
@@ -121,8 +121,8 @@ VARIABLE_COLOURS = ['b', 'r', 'goldenrod', 'grey', 'g', 'grey', 'grey']
 # -------------------  Exploring if we can input mulitple .rsk files----------------------
 
 
-def EXPORT_RSK(dest_dir: str, year: str, cruise_number: str,
-               skipcasts=0, rsk_time1=None, rsk_time2=None):
+def READ_RSK(dest_dir: str, year: str, cruise_number: str,
+             skipcasts, rsk_time1=None, rsk_time2=None) -> None:
     """
     Formerly EXPORT_MULTIFILES()
     Replace all_last parameter to skipcasts: list-like or int For cases when there
@@ -130,8 +130,11 @@ def EXPORT_RSK(dest_dir: str, year: str, cruise_number: str,
 
     Read in a directory of rsk files and output in csv format
     Inputs:
-        - folder, file, year, cruise_number: rsk-format file containing raw RBR data
-        - all_last: "ALL" or "LAST"; define which profiles to extract from the rsk file
+        - dest_dir
+        - year
+        - cruise_number:
+        - skipcasts
+        - rsk_time1, rsk_time2
     Outputs:
         - csv file: csv files containing the profile data
     """
@@ -211,6 +214,10 @@ def EXPORT_RSK(dest_dir: str, year: str, cruise_number: str,
             print(f'Invalid skipcasts value, {skipcasts}. Must be int or same length as number of rsk files.')
             return
 
+        if len(profile_range) == 0:
+            print('Warning: Number of casts to skip in file', files[k],
+                  'equals the number of casts in the file')
+
         # Iterate through the selected profiles in one rsk file
         for i in profile_range:
             downcast_dataframe = pd.DataFrame(rsk.data).loc[downcastIndices[i]]
@@ -237,11 +244,9 @@ def EXPORT_RSK(dest_dir: str, year: str, cruise_number: str,
             upcast_dataframe.columns = column_names
 
             downcast_dataframe["Cast_direction"] = "d"  # add a column for cast direction
-            # downcast_dataframe["Event"] = current_profile  # add a column for event number - count the profiles
             downcast_dataframe["Event"] = header_event_no[event_number_idx]
 
             upcast_dataframe["Cast_direction"] = "u"
-            # upcast_dataframe["Event"] = current_profile
             upcast_dataframe["Event"] = header_event_no[event_number_idx]
 
             # combine downcast and upcast into one profile
@@ -251,50 +256,51 @@ def EXPORT_RSK(dest_dir: str, year: str, cruise_number: str,
                 os.path.basename(filename)[:-4], str(header_event_no[event_number_idx]).zfill(4))
 
             profile_data.to_csv(dest_dir + profile_name, index=False)  # export each profile
-            # current_profile = current_profile + 1  # sequential profiles through the files
+
+            # Update counter
             event_number_idx += 1
     return
 
 
-def READ_EXCELrsk(dest_dir: str, year: str, cruise_number: str, skipcasts=0):
+def READ_EXCELrsk(dest_dir: str, year: str, cruise_number: str, skipcasts) -> None:
     """
-    Function to read in an excel (.xlxs) file exported from RUSKIN software using
+    Function to read in an excel (.xlsx) file exported from RUSKIN software using
     the rbr .rsk file. An alternative to reading data directly from the .rsk files.
-    inputs
-    - dest_dir
-    - year
-    - cruise_number
-    - skipcasts: number of casts to skip over in an excel file when writing data to output format.
-        Input format as either an integer or as a list-like object with one integer per excel file
-        representing the number of initial casts to skip in each excel file.
+    inputs:
+        - dest_dir: working & destination directory
+        - year: year of input cruise
+        - cruise_number: cruise number of input cruise
+        - skipcasts: number of casts to skip over in an excel file when writing data to output format.
+            Input format as either an integer or as a list-like object with one integer per excel file
+            representing the number of initial casts to skip in each excel file.
+    outputs:
+        - one csv file per RBR cast, containing the data from that cast
    """
 
     files = os.listdir(dest_dir)  # list all the files in dest_dir
     files = list(filter(lambda f: f.endswith('.xlsx'), files))  # keep the rsk xlsx files only (make sure no other xlsx)
-    n_files = len(files)  # get the number of files
-
-    # current_profile = event_start
+    print(files)
     header_merge_file = os.path.join(dest_dir, f'{year}-{cruise_number}_header-merge.csv')
     header_merge_df = pd.read_csv(header_merge_file)
     header_event_no = header_merge_df.loc[:, 'LOC:Event Number'].to_numpy()
-    event_number_idx = 0  # initialize counter to go through the event numbers in header_merge_df
+    event_number_idx = 0  # initialize index counter to go through the event numbers in header_merge_df
 
     # Iterate through all available excel files
-    for k in range(n_files):
-        filename = os.path.join(str(dest_dir), str(files[k]))  # full path and name of .rsk file
+    for k in range(len(files)):
+        filename = os.path.join(dest_dir, files[k])  # full path and name of .rsk file
 
         # extract a dataframe from the excel sheets
-        # hourstonh 2022-01-25: xlrd package does not read xlsx files any more
+        # hourstonh 2023-01-25: xlrd package does not read xlsx files any more; See release notes
         # https://groups.google.com/g/python-excel/c/IRa8IWq_4zk/m/Af8-hrRnAgAJ?pli=1
-        # See release notes
-        df1 = pd.read_excel(filename, sheet_name='Data', skiprows=[0], engine='openpyxl')  # engine=openpyxl
+        df1 = pd.read_excel(filename, sheet_name='Data', skiprows=[0], engine='openpyxl')
         try:
             df2 = pd.read_excel(filename, sheet_name='Profile_annotation', skiprows=[0],
                                 engine='openpyxl')
         except ValueError:
             print('User must change "Profile annotation" sheet name to "Profile_annotation"')
             return
-        # df3 = pd.read_excel(filename, sheet_name='Metadata', skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
+        # df3 = pd.read_excel(filename, sheet_name='Metadata',
+        #                     skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
         #                     usecols=[2], engine='openpyxl')
 
         # Convert time data to pandas datetime format
@@ -313,19 +319,22 @@ def READ_EXCELrsk(dest_dir: str, year: str, cruise_number: str, skipcasts=0):
         up_times['End'] = df2['Time 2'][2::3]
         up_times.index = range(len(up_times))
 
-        n_times = len(list(down_times['Start']))  # Number of casts in the input file
-
-        # ctd_data = pd.DataFrame()
+        total_casts = len(list(down_times['Start']))  # Number of casts in the input file
 
         # Iterate through the profiles in a single file
         if type(skipcasts) == int:
-            profile_range = range(skipcasts, n_times)
+            profile_range = range(skipcasts, total_casts)
         elif len(skipcasts) == len(header_event_no):
-            profile_range = range(skipcasts[k], n_times)
+            profile_range = range(skipcasts[k], total_casts)
         else:
             print(f'Invalid skipcasts value, {skipcasts}. Must be int or same length as number of rsk files.')
             return
 
+        if len(profile_range) == 0:
+            print('Warning: Number of casts to skip in file', files[k],
+                  'equals the number of casts in the file')
+
+        # Iterate through the selected profiles
         for i in profile_range:
             down_start_time = down_times['Start'][i]
             down_end_time = down_times['End'][i]
@@ -333,59 +342,37 @@ def READ_EXCELrsk(dest_dir: str, year: str, cruise_number: str, skipcasts=0):
             up_end_time = up_times['End'][i]
 
             # extract data for each profile - using start and end times
-            downcast = df1[(df1['Time'] > down_start_time) & (df1['Time'] <= down_end_time)]
+            downcast = df1.loc[(df1['Time'] > down_start_time) & (df1['Time'] <= down_end_time)]
             downcast['Cast_direction'] = 'd'
-            # Add event numbers - need an event start number
-            # (i + 1 only works if one file and the events start at 1.
-            # alter code to read in multiple files and create an Event_Start_List to loop through?
-            # or if events aren't sequential a list of all event numbers to add at the end?
-            # current_profile = k + (i - range_start) + event_start  # hourstonh
-            # downcast['Event'] = i + event_start  # get this from the log
+            # Add event numbers
             downcast['Event'] = header_event_no[event_number_idx]  # current_profile
-            upcast = df1[(df1['Time'] > up_start_time) & (df1['Time'] <= up_end_time)]
+            upcast = df1.loc[(df1['Time'] > up_start_time) & (df1['Time'] <= up_end_time)]
             upcast['Cast_direction'] = 'u'
-            # upcast['Event'] = i + event_start  # get this from the log
             upcast['Event'] = header_event_no[event_number_idx]  # current_profile
             profile_data = pd.concat([downcast, upcast])  # combine downcast and upcast into one profile
 
-            # Fix split character to account for forward and double-backward slashes
-            # Also take period off with the file extension: [0:-5] instead of [0:-4]
-            split_char = '/' if '/' in filename else '\\'
-
-            # if all_last == 'LAST':
-            #     profile_name = filename.split("/")[-1][0:-4].upper() + "_profile" + str(i + current_profile).zfill(
-            #         4) + ".csv"  # profile name #i + from log
-            # elif all_last == 'ALL':
-            #     profile_name = filename.split("/")[-1][0:-4].upper() + "_profile" + str(i + event_start).zfill(
-            #         4) + ".csv"  # profile name #i + from log
-            #     output_filename = year + "-" + cruise_number + "_CTD_DATA.csv"  # all data file name
-            #
-            #     ctd_data = ctd_data.append(profile_data, ignore_index=True)  # combine profiles into one file
-            #     profile_data.rename({'Time': 'Time(yyyy-mm-dd HH:MM:ss.FFF)'}, axis=1, inplace=True)
-            #     profile_data.to_csv(dest_dir + profile_name)  # export each profile
-            #     current_profile = current_profile + 1
-
-            profile_name = "{}_profile{}.csv".format(filename.split(split_char)[-1][:-4],
+            profile_name = "{}_profile{}.csv".format(os.path.basename(filename)[:-5],
                                                      str(header_event_no[event_number_idx]).zfill(4))
             print(profile_name)
 
-            # hourstonh commented out
-            # ctd_data = ctd_data.append(profile_data, ignore_index=True)  # combine profiles into one file
+            # Change column name for time
             profile_data.rename({'Time': 'Time(yyyy-mm-dd HH:MM:ss.FFF)'}, axis=1, inplace=True)
 
-            profile_data.to_csv(dest_dir + profile_name, index=False)  # export each profile #, index=False
+            profile_data.to_csv(os.path.join(dest_dir, profile_name), index=False)
 
             # Update event number index counter
             event_number_idx += 1
 
-        return
+    return
 
 
-def MERGE_FILES(dest_dir: str, year: str, cruise_number: str):
+def MERGE_FILES(dest_dir: str, year: str, cruise_number: str) -> None:
     """
     Read in multiple csv file and output one csv format
     Inputs:
-        - folder, year, cruise_number
+        - dest_dir
+        - year
+        - cruise_number
     Outputs:
         - csv file: csv files containing the profile data
    """
@@ -483,7 +470,7 @@ def CREATE_META_DICT(dest_dir: str, rsk_file: str, year: str, cruise_number: str
     return meta_dict
 
 
-def ADD_6LINEHEADER_2(dest_dir: str, year: str, cruise_number: str):
+def ADD_6LINEHEADER_2(dest_dir: str, year: str, cruise_number: str) -> None:
     """
      Read in a csv file and output in csv format for use in IOSShell
      Filter through the csv and remove un-needed columns.
@@ -641,8 +628,10 @@ def plot_track_location(dest_dir: str, year: str, cruise_number: str, left_lon=N
     """
      Read in a csv file and output a map
      Inputs:
-         - folder, year, cruise: csv file containing raw RBR data
-         - left_lon, right_lon, bot_lat, top_lat: longitude and latitude of map extent
+         - dest_dir
+         - year
+         - cruise_number
+         - left_lon, right_lon, bot_lat, top_lat: longitude and latitude range of map extent
      Outputs:
          - A map showing sampling locations
      """
@@ -738,7 +727,9 @@ def PLOT_PRESSURE_DIFF(dest_dir: str, year: str, cruise_number: str, input_ext: 
     """
      Read in a csv file and output a plot to check zero-order holds
      Inputs:
-         - folder, year, cruise: csv file containing raw RBR data
+         - dest_dir
+         - year
+         - cruise_number
          - input_ext: '_CTD_DATA-6linehdr.csv' or '_CTD_DATA-6linehdr_corr_hold.csv'
      Outputs:
          - a plot showing the time derivative of raw pressure
@@ -779,11 +770,13 @@ def PLOT_PRESSURE_DIFF(dest_dir: str, year: str, cruise_number: str, input_ext: 
     return
 
 
-def CREATE_CAST_VARIABLES(year: str, cruise_number: str, dest_dir, input_ext: str):
+def CREATE_CAST_VARIABLES(year: str, cruise_number: str, dest_dir: str, input_ext: str) -> tuple:
     """
      Read in a csv file and output data dictionaries to hold profile data
      Inputs:
-         - folder, year, cruise: csv file containing raw RBR data
+         - dest_dir
+         - year
+         - cruise_number
          - input_ext: '_CTD_DATA-6linehdr.csv' or '_CTD_DATA-6linehdr_corr_hold.csv'
      Outputs:
          - three dictionaries containing casts, downcasts and upcasts
@@ -807,14 +800,12 @@ def CREATE_CAST_VARIABLES(year: str, cruise_number: str, dest_dir, input_ext: st
     cols = ctd.columns[0:-4]
     # cols_names = ctd.columns.tolist()
     ctd[cols] = ctd[cols].apply(pd.to_numeric, errors='coerce', axis=1)
-    ctd['Cast_direction'] = ctd['Cast_direction'].str.strip()  # todo error
+    ctd['Cast_direction'] = ctd['Cast_direction'].str.strip()
 
     # Fix the iteration to account for event numbers that aren't sequential or start at n>1
-    # n = ctd['Event_number'].nunique()
     unique_event_numbers = ctd['Event_number'].unique()
 
     var_holder = {}
-    # for i in range(1, n + 1):
     for i in unique_event_numbers:
         # Assign values of type DataFrame
         var_holder['cast' + str(i)] = ctd.loc[(ctd['Event_number'] == str(i))]
@@ -841,15 +832,16 @@ def CREATE_CAST_VARIABLES(year: str, cruise_number: str, dest_dir, input_ext: st
 
 def format_processing_plot(ax: plt.Axes, x_var_name: str, x_var_units,
                            y_var_name: str, y_var_units: str, plot_title: str,
-                           invert_yaxis: bool, add_legend: bool = False):
+                           invert_yaxis: bool, add_legend: bool = False) -> None:
     """
+    Format a plot that has already been initialized.
     inputs:
         - ax: from fig, ax = plt.subplots()
         - var_name: one of Temperature, Conductivity, Salinity,
                     Fluorescence, Oxygen, Oxygen_mL_L, Oxygen_umol_kg
         - var_units: the units corresponding to the selected var_name
         - plot_title: Should indicate which processing step the plots are at
-        - add_legend: If true then add a legend to the plot
+        - add_legend: If True then add a legend to the plot, default False
     """
     if invert_yaxis:
         ax.invert_yaxis()
@@ -876,9 +868,12 @@ def format_processing_plot(ax: plt.Axes, x_var_name: str, x_var_units,
     return
 
 
-def first_plots(year: str, cruise_number: str, dest_dir, input_ext: str):
+def first_plots(year: str, cruise_number: str, dest_dir: str, input_ext: str):
     """ Plot pre-processing and after Zero-order Holds if needed
     inputs:
+        - year
+        - cruise_number
+        - dest_dir
         - input_ext: '_CTD_DATA-6linehdr.csv' or '_CTD_DATA-6linehdr_corr_hold.csv'
     """
 
@@ -1157,10 +1152,12 @@ def check_for_zoh(dest_dir, year: str, cruise_number: str,
     'The analog-to-digital (A2D) converter on RBR instruments must recalibrate once per
     minute.'
     inputs
-        - dest_dir: destination directory
+        - dest_dir: destination/working directory
         - year
         - cruise_number
         - sampling_interval: amount of time in seconds between records
+    outputs
+        - boolean flag indicating whether zero-order holds are present in the data
     """
 
     input_name = str(year) + "-" + str(cruise_number) + '_CTD_DATA-6linehdr.csv'
@@ -1190,7 +1187,7 @@ def check_for_zoh(dest_dir, year: str, cruise_number: str,
     return zoh_correction_needed
 
 
-def CORRECT_HOLD(dest_dir: str, year: str, cruise_number: str, metadata_dict: dict):
+def CORRECT_HOLD(dest_dir: str, year: str, cruise_number: str, metadata_dict: dict) -> None:
     """
     Read 6linehdr.csv and correct for zero order holds.  Look for repeat values in
     Pressure and replace with NaN, then
@@ -1315,17 +1312,17 @@ def CORRECT_HOLD(dest_dir: str, year: str, cruise_number: str, metadata_dict: di
 
 
 def CALIB(var: dict, var_downcast: dict, var_upcast: dict, metadata_dict: dict,
-          zoh: bool, pd_correction_value=0):
+          zoh: bool, pd_correction_value=0) -> tuple:
     """
      Correct pressure and depth data
      Inputs:
          - cast, downcast, upcast and metadata dictionaries
          - correction_value: for pressure and depth data
+         - metadata_dict
          - zoh: if "no", then zero-order hold correction was not applied, else "yes"
      Outputs:
          - cast, downcast, upcast and metadata dictionaries after pressure correction
      """
-    # n = len(var.keys())
     var1 = deepcopy(var)
     var2 = deepcopy(var_downcast)
     var3 = deepcopy(var_upcast)
@@ -1357,7 +1354,7 @@ def CALIB(var: dict, var_downcast: dict, var_upcast: dict, metadata_dict: dict,
 
 
 def CLIP_CAST(var: dict, metadata_dict: dict, limit_pressure_change: float,
-              cast_direction: str):
+              cast_direction: str) -> dict:
     """
     CLIP the unstable measurement from sea surface and bottom on the downcast OR upcast
      Inputs:
@@ -1501,7 +1498,13 @@ def CLIP_CAST(var: dict, metadata_dict: dict, limit_pressure_change: float,
 
 
 def plot_clip(cast_d_clip: dict, cast_d_pc: dict, dest_dir: str):
-    """ plot the clipped casts to check that the clipping worked"""
+    """
+    plot the clipped casts to check that the clipping worked
+    inputs
+        - cast_d_clip
+        - cast_d_pc
+        - dest_dir
+    """
 
     # Create a folder for figures if it doesn't already exist
     figure_dir = os.path.join(dest_dir, 'FIG')
@@ -1515,7 +1518,7 @@ def plot_clip(cast_d_clip: dict, cast_d_pc: dict, dest_dir: str):
         # ax.plot(cast_u_pc[cast_i].TIME, cast_u_pc[cast_i].Pressure,
         #         color='blue')
     xticks = ax.get_xticks()
-    ax.set_xticks(ticks=xticks[::300])  # Make ticks farther apart
+    ax.set_xticks(ticks=xticks[::int(len(xticks)/4)])  # Make ticks farther apart
     format_processing_plot(ax, x_var_name='Time', x_var_units=None,
                            y_var_name='Pressure', y_var_units='dbar',
                            plot_title='Downcasts before clip', invert_yaxis=True)
@@ -1529,7 +1532,7 @@ def plot_clip(cast_d_clip: dict, cast_d_pc: dict, dest_dir: str):
         # ax.plot(cast_u_clip[cast_i].TIME, cast_u_clip[cast_i].Pressure,
         #         color='blue')
     xticks = ax.get_xticks()
-    ax.set_xticks(ticks=xticks[::300])
+    ax.set_xticks(ticks=xticks[::int(len(xticks)/4)])
     format_processing_plot(ax, x_var_name='Time', x_var_units=None,
                            y_var_name='Pressure', y_var_units='dbar',
                            plot_title='Downcasts after clip', invert_yaxis=True)
@@ -1580,6 +1583,9 @@ def FILTER(var_downcast: dict, var_upcast: dict, metadata_dict: dict,
      Filter the profile data using a low pass filter: moving average
      Inputs:
          - downcast and upcast data dictionaries
+         - metadata_dict
+         - have_fluor: boolean flag indicating whether fluorescence data are present;
+            if they are then they are also filtered
          - window_width:
          - sample_rate:
          - time_constant:
@@ -1635,8 +1641,15 @@ def FILTER(var_downcast: dict, var_upcast: dict, metadata_dict: dict,
 
 def plot_filter(cast_d_filtered: dict, cast_u_filtered: dict,
                 cast_d_clip: dict, cast_u_clip: dict, dest_dir: str,
-                have_fluor: bool):
-    """ Make plots to show channel values before and after filtering"""
+                have_fluor: bool) -> None:
+    """
+    Make plots to show channel values before and after filtering
+    inputs:
+        - cast_d_filtered, cast_u_filtered: downcast and upcast data dictionaries after filtering
+        - cast_d_clip, cast_u_clip: downcast and upcast data dictionaries after clipping
+        - dest_dir
+        - have_fluor
+    """
 
     # Create a folder for figures if it doesn't already exist
     figure_dir = os.path.join(dest_dir, 'FIG')
@@ -1690,7 +1703,7 @@ def plot_filter(cast_d_filtered: dict, cast_u_filtered: dict,
 # ------------------ Step 11: Shift conductivity and recalculate salinity ----------------------
 
 def SHIFT_CONDUCTIVITY(var_downcast: dict, var_upcast: dict,
-                       metadata_dict: dict, shifted_scan_number=2):
+                       metadata_dict: dict, shifted_scan_number=2) -> tuple:
     """
      Delay the conductivity signal, and recalculate salinity
      Inputs:
@@ -1699,7 +1712,6 @@ def SHIFT_CONDUCTIVITY(var_downcast: dict, var_upcast: dict,
      Outputs:
          - two dictionaries containing downcast and upcast profiles
      """
-    # cast_number = len(var_downcast.keys())
     var1 = deepcopy(var_downcast)
     var2 = deepcopy(var_upcast)
     # Apply the shift to each cast
@@ -1732,7 +1744,7 @@ def SHIFT_CONDUCTIVITY(var_downcast: dict, var_upcast: dict,
 
 
 def plot_shift_c(cast_d_shift_c: dict, cast_u_shift_c: dict,
-                 cast_d_filtered: dict, cast_u_filtered: dict, dest_dir: str):
+                 cast_d_filtered: dict, cast_u_filtered: dict, dest_dir: str) -> None:
     """
     Plot Salinity and T-S to check the index after shift
     inputs:
@@ -1808,7 +1820,7 @@ def plot_shift_c(cast_d_shift_c: dict, cast_u_shift_c: dict,
 # input variable: cast_d_filtered, cast_u_filtered, try 2-3s (12-18 scans for 6Hz)
 
 def SHIFT_OXYGEN(var_downcast: dict, var_upcast: dict,
-                 metadata_dict: dict, shifted_scan_number=-11):
+                 metadata_dict: dict, shifted_scan_number=-11) -> tuple:
     """
      Advance oxygen data by 2-3s
      Inputs:
@@ -2480,72 +2492,6 @@ def write_file(cast_number, cast_original: dict, cast_final: dict,
         # Update channel counter
         current_chan_no += 1
 
-    # print('{:>8}'.format('1') + " " + '{:33}'.format(
-    #     list(cast_final['cast' + str(cast_number)].columns)[0]) + '{:15}'.format(
-    #     "decibar") + '{:15}'.format(
-    #     str(np.nanmin(cast_final['cast' + str(cast_number)].Pressure.astype(float)))) + '{:14}'.format(
-    #     str(np.nanmax(cast_final['cast' + str(cast_number)].Pressure.astype(float)))))
-    #
-    # print('{:>8}'.format('2') + " " + '{:33}'.format(
-    #     list(cast_final['cast' + str(cast_number)].columns)[1]) + '{:15}'.format(
-    #     "metres") + '{:15}'.format(
-    #     str(np.nanmin(cast_final['cast' + str(cast_number)].Depth.astype(float)))) + '{:14}'.format(
-    #     str(np.nanmax(cast_final['cast' + str(cast_number)].Depth.astype(float)))))
-    #
-    # print('{:>8}'.format('3') + " " + '{:33}'.format(
-    #     list(cast_final['cast' + str(cast_number)].columns)[2]) + '{:15}'.format(
-    #     "'deg C (ITS90)'") + '{:15}'.format(
-    #     str(np.nanmin(cast_final['cast' + str(cast_number)].Temperature.astype(float)))) + '{:14}'.format(
-    #     str(np.nanmax(cast_final['cast' + str(cast_number)].Temperature.astype(float)))))
-    #
-    # print('{:>8}'.format('4') + " " + '{:33}'.format(
-    #     list(cast_final['cast' + str(cast_number)].columns)[3]) + '{:15}'.format(
-    #     "PSS-78") + '{:15}'.format(
-    #     str(np.nanmin(cast_final['cast' + str(cast_number)].Salinity.astype(float)))) + '{:14}'.format(
-    #     str(float('%.04f' % np.nanmax(cast_final['cast' + str(cast_number)].Salinity.astype(float))))))
-    #
-    # if have_oxy:
-    #     print('{:>8}'.format('5') + " " + '{:33}'.format(
-    #         list(cast_final['cast' + str(cast_number)].columns)[4]) +
-    #           '{:15}'.format("mg/m^3") +
-    #           '{:15}'.format(str(np.nanmin(
-    #               cast_final['cast' + str(cast_number)]['Fluorescence:URU'].astype(float)))) +
-    #           '{:14}'.format(str(float('%.03f' % np.nanmax(
-    #               cast_final['cast' + str(cast_number)]['Fluorescence:URU'].astype(float))))))
-    #
-    #     print('{:>8}'.format('6') + " " + '{:33}'.format(
-    #         list(cast_final['cast' + str(cast_number)].columns)[5]) + '{:15}'.format(
-    #         "%") + '{:15}'.format(str(np.nanmin(
-    #         cast_final['cast' + str(cast_number)]['Oxygen:Dissolved:Saturation:RBR'].astype(
-    #             float)))) + '{:14}'.format(str(float('%.04f' % np.nanmax(
-    #         cast_final['cast' + str(cast_number)]['Oxygen:Dissolved:Saturation:RBR'].astype(float))))))
-    #
-    #     print('{:>8}'.format('7') + " " + '{:33}'.format(
-    #         list(cast_final['cast' + str(cast_number)].columns)[6]) + '{:15}'.format(
-    #         "S/m") + '{:15}'.format(
-    #         str(np.nanmin(cast_final['cast' + str(cast_number)].Conductivity.astype(float)))) + '{:14}'.format(
-    #         str(float('%.05f' % np.nanmax(cast_final['cast' + str(cast_number)].Conductivity.astype(float))))))
-    #
-    #     print('{:>8}'.format('8') + " " + '{:33}'.format(
-    #         list(cast_final['cast' + str(cast_number)].columns)[7]) + '{:15}'.format(
-    #         "n/a") + '{:15}'.format(str(np.nanmin(
-    #         cast_final['cast' + str(cast_number)]['Number_of_bin_records'].astype(float)))) + '{:14}'.format(
-    #         str(np.nanmax(cast_final['cast' + str(cast_number)]['Number_of_bin_records'].astype(float)))))
-    #
-    # else:
-    #     print('{:>8}'.format('5') + " " + '{:33}'.format(
-    #         list(cast_final['cast' + str(cast_number)].columns)[4]) + '{:15}'.format(
-    #         "S/m") + '{:15}'.format(
-    #         str(np.nanmin(cast_final['cast' + str(cast_number)].Conductivity.astype(float)))) + '{:14}'.format(
-    #         str(float('%.05f' % np.nanmax(cast_final['cast' + str(cast_number)].Conductivity.astype(float))))))
-    #
-    #     print('{:>8}'.format('6') + " " + '{:33}'.format(
-    #         list(cast_final['cast' + str(cast_number)].columns)[5]) + '{:15}'.format(
-    #         "n/a") + '{:15}'.format(str(np.nanmin(
-    #         cast_final['cast' + str(cast_number)]['Number_of_bin_records'].astype(float)))) +
-    #           '{:14}'.format(
-    #               str(np.nanmax(cast_final['cast' + str(cast_number)]['Number_of_bin_records'].astype(float)))))
-
     # Add in table of Channel summary
     print('{:>8}'.format('$END'))
     print()
@@ -2567,42 +2513,6 @@ def write_file(cast_number, cast_original: dict, cast_final: dict,
         # Update channel counter
         current_chan_no += 1
 
-    # print(
-    #     '{:>8}'.format('1') + "  " + '{:6}'.format(str(nan)) + '{:7}'.format("' '") + '{:7}'.format(
-    #         str(7)) + '{:8}'.format(
-    #         'F') + '{:6}'.format('R4') + '{:3}'.format(1))
-    # print(
-    #     '{:>8}'.format('2') + "  " + '{:6}'.format(str(nan)) + '{:7}'.format("' '") + '{:7}'.format(
-    #         str(7)) + '{:8}'.format(
-    #         'F') + '{:6}'.format('R4') + '{:3}'.format(1))
-    # print(
-    #     '{:>8}'.format('3') + "  " + '{:6}'.format(str(nan)) + '{:7}'.format("' '") + '{:7}'.format(
-    #         str(9)) + '{:8}'.format(
-    #         'F') + '{:6}'.format('R4') + '{:3}'.format(4))
-    # print(
-    #     '{:>8}'.format('4') + "  " + '{:6}'.format(str(nan)) + '{:7}'.format("' '") + '{:7}'.format(
-    #         str(9)) + '{:8}'.format(
-    #         'F') + '{:6}'.format('R4') + '{:3}'.format(4))
-    # for var_item in vars:
-    #     if var_item == 'Fluorescence':
-    #         print(
-    #             '{:>8}'.format('5') + "  " + '{:6}'.format(str(nan)) + '{:7}'.format("' '") + '{:7}'.format(
-    #                 str(8)) + '{:8}'.format(
-    #                 'F') + '{:6}'.format('R4') + '{:3}'.format(3))
-    #     elif var_item == 'Oxygen':
-    #         print(
-    #             '{:>8}'.format('6') + "  " + '{:6}'.format(str(nan)) + '{:7}'.format("' '") + '{:7}'.format(
-    #                 str(8)) + '{:8}'.format(
-    #                 'F') + '{:6}'.format('R4') + '{:3}'.format(2))
-    # print(
-    #     '{:>8}'.format('7') + "  " + '{:6}'.format(str(nan)) + '{:7}'.format("' '") + '{:7}'.format(
-    #         str(10)) + '{:8}'.format(
-    #         'F') + '{:6}'.format('R4') + '{:3}'.format(6))
-    # print(
-    #     '{:>8}'.format('8') + "  " + '{:6}'.format("' '") + '{:7}'.format("' '") + '{:7}'.format(
-    #         str(5)) + '{:8}'.format(
-    #         'I') + '{:6}'.format('I') + '{:3}'.format(0))
-
     # Add in table of Channel detail summary
     print('{:>8}'.format('$END'))
     print()
@@ -2610,7 +2520,11 @@ def write_file(cast_number, cast_original: dict, cast_final: dict,
 
 
 def write_admin(metadata_dict: dict):
-    """function to write administation section"""
+    """
+    function to write administation section of IOS header file
+    inputs:
+        - metadata_dict: dictionary containing metadata for the RBR CTD
+    """
     mission = metadata_dict["Mission"]
     agency = metadata_dict["Agency"]
     country = metadata_dict["Country"]
@@ -2632,7 +2546,8 @@ def write_location(cast_number: int, metadata_dict: dict):
     """
      write location part in IOS header file
      Inputs:
-         - cast_number, metadata_list
+         - cast_number
+         - metadata_dict: dictionary containing metadata for the RBR CTD
      Outputs:
          - part of txt file
      """
@@ -2680,7 +2595,10 @@ def write_location(cast_number: int, metadata_dict: dict):
 
 
 def write_instrument(metadata_dict: dict):
-    """function to write instrument info"""
+    """function to write instrument info
+    inputs:
+        - metadata_dict: dictionary containing metadata for the RBR CTD
+    """
     model = metadata_dict['Instrument_Model']
     if int(metadata_dict['Serial_number']) < 1000:
         serial_number = f'{0:0}' + metadata_dict['Serial_number']
@@ -2718,6 +2636,7 @@ def write_history(have_oxy: bool,
         - cast_binned:
         - cast_final:
         - cast_number:
+        - metadata_dict: dictionary containing metadata for the RBR CTD
     outputs: nothing
     """
 
@@ -2803,7 +2722,7 @@ def write_history(have_oxy: bool,
     print(" $REMARKS")
 
     list_number = len(metadata_dict['Processing_history'].split("|"))
-    for i in range(0, list_number, 1):
+    for i in range(list_number):
         print("     " + metadata_dict['Processing_history'].split("|")[i])
     print("$END")
     print()
@@ -2811,7 +2730,12 @@ def write_history(have_oxy: bool,
 
 
 def write_comments(have_fluor: bool, have_oxy: bool, processing_report_name: str):
-    """Write comments section in the IOS header file"""
+    """Write comments section in the IOS header file
+    inputs:
+        - have_fluor: boolean flag, True if fluorescence channel is available
+        - have_oxy: boolean flag, True if oxygen channels are available
+        - processing_report_name: name of the RBR processing report for the selected cruise
+    """
     # cruise_ID = metadata_dict["Mission"]
     print("*COMMENTS")
     print("    " + "-" * 85)
@@ -2866,7 +2790,13 @@ def write_comments(have_fluor: bool, have_oxy: bool, processing_report_name: str
 
 
 def write_data(have_fluor: bool, have_oxy: bool, cast_data: dict, cast_number: int):  # , cast_d):
-    """Write data to header file, taking into account if fluorescence and oxygen data are there"""
+    """Write data to header file, taking into account if fluorescence and oxygen data are there
+    inputs:
+        - have_fluor: boolean flag, True if fluorescence channel is available
+        - have_oxy: boolean flag, True if oxygen channels are available
+        - cast_data: dictionary containing the processed data for the selected cast
+        - cast_number: the event number for the cast
+    """
     if have_fluor and have_oxy:
         for i in range(len(cast_data['cast' + str(cast_number)])):
             # print(cast_data['cast' + str(cast_number)]['Pressure'][i] +
@@ -2920,20 +2850,22 @@ def main_header(dest_dir, n_cast: int, metadata_dict: dict, cast: dict,
                 cast_d_wakeeffect: dict, cast_d_binned: dict, cast_d_final: dict,
                 have_fluor: bool, have_oxy: bool, processing_report_name: str):
     """
+    Main function for creating an IOS header file containing final processed RBR CTD data
     inputs:
-        - dest_dir
+        - dest_dir: working directory that output files are saved to
         - n_cast
-        - meta_data
-        - cast
-        - cast_d
-        - cast_d_clip
-        - cast_d_filtered,
-        - cast_d_shift_c
-        - cast_d_shift_o
-        - cast_d_wakeeffect
-        - cast_d_binned
-        - cast_d_final
-        - have_fluor, have_oxy
+        - metadata_dict: dictionary containing metadata for the selected RBR cruise
+        - cast: dictionary containing the original raw data from both the upcast and downcast
+        - cast_d: dictionary containing the original raw data from the downcast only
+        - cast_d_clip: dictionary containing the clipped downcast data
+        - cast_d_filtered: dictionary containing the low-pass filtered downcast data
+        - cast_d_shift_c: dictionary containing the downcast data that had conductivity shifted
+        - cast_d_shift_o: dictionary containing the downcast data that had oxygen shifted
+        - cast_d_wakeeffect: dictionary containing the downcast data that had pressure reversals deleted
+        - cast_d_binned: dictionary containing the downcast data that was binned into 1dbar vertical bins
+        - cast_d_final: dictionary containing the final processed data, with conductivity in units of S/m
+        - have_fluor: boolean flag, True if fluorescence channel is available
+        - have_oxy: boolean flag, True if oxygen channels are available
     outputs:
         - absolute path of the output data file
     """
@@ -2978,7 +2910,7 @@ def main_header(dest_dir, n_cast: int, metadata_dict: dict, cast: dict,
     return os.path.abspath(output)
 
 
-def get_started(dest_dir):
+def get_started(dest_dir: str):
     """ Start by opening the RSK files, find out how many channels and profiles there are
 
         Compare this to the cast list given by chief scientist
@@ -3018,9 +2950,8 @@ def get_started(dest_dir):
     return
 
 
-def first_step(dest_dir, year: str, cruise_number: str,
-               data_file_type: str, skipcasts=0,
-               rsk_time1=None, rsk_time2=None,
+def first_step(dest_dir, year: str, cruise_number: str, data_file_type: str,
+               skipcasts, rsk_time1=None, rsk_time2=None,
                left_lon=None, right_lon=None, bot_lat=None, top_lat=None):
     """
     Choose how to export the csv files from the rsk files
@@ -3044,7 +2975,7 @@ def first_step(dest_dir, year: str, cruise_number: str,
      """
 
     if data_file_type == 'rsk':
-        EXPORT_RSK(dest_dir, year, cruise_number, skipcasts, rsk_time1, rsk_time2)
+        READ_RSK(dest_dir, year, cruise_number, skipcasts, rsk_time1, rsk_time2)
     elif data_file_type == 'excel':
         # input file =  # not needed, filtered to keep only .xls
         READ_EXCELrsk(dest_dir, year, cruise_number, skipcasts)
@@ -3248,7 +3179,7 @@ def second_step(dest_dir: str, year: str, cruise_number: str,
 
 def PROCESS_RBR(dest_dir, year: str, cruise_number: str,
                 processing_report_name: str, rsk_file: str, data_file_type: str,
-                window_width: int, skipcasts=0, filter_type: int = 1,
+                window_width: int, skipcasts, filter_type: int = 1,
                 # sample_rate: int, time_constant: float,
                 shift_recs_conductivity: int = -2, shift_recs_oxygen=None,
                 pd_correction_value=0, rsk_time1=None, rsk_time2=None,
@@ -3257,9 +3188,11 @@ def PROCESS_RBR(dest_dir, year: str, cruise_number: str,
     """
     Main function to run the suite of processing functions on raw RBR data
     inputs:
-        - dest_dir, year,
+        - dest_dir
+        - year
         - cruise_number: 3-character string, e.g., '015', '101'
-        - event_start:
+        - processing_report_name
+        - rsk_file: relative file name of an rsk file in the dest_dir
         - skipcasts
         - data_file_type: 'rsk' for ruskin files or "excel"
         (use on .xlsx files exported from Ruskin)
@@ -3285,17 +3218,17 @@ def test_process():
     # # num_profiles = 6
     # skipcasts = 0
 
-    test_year = '2023'
-    test_cruise_num = '015'
-    test_file = '208765_20230121_2113_newDOcoefficients.rsk'
-    # num_profiles = 44
-    skipcasts = 54  # First 53 casts from an earlier cruise + 1 cast with error
+    # test_year = '2023'
+    # test_cruise_num = '015'
+    # test_file = '208765_20230121_2113_newDOcoefficients.rsk'
+    # # num_profiles = 44
+    # skipcasts = 54  # First 53 casts from an earlier cruise + 1 cast with error
 
-    # test_year = '2022'  # Issue with rsk.open() on files from this cruise
-    # test_cruise_num = '031'
-    # test_file = '204848_20220304_2322-Haro Strait.rsk'
-    # num_profiles = 1
-    # skipcasts = 1
+    test_year = '2022'  # Issue with rsk.open() on files from this cruise
+    test_cruise_num = '031'
+    test_file = '204848_20220304_2322-Haro Strait.rsk'
+    num_profiles = 1
+    skipcasts = [1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0]
 
     test_dir = 'C:\\Users\\HourstonH\\Documents\\ctd_processing\\RBR\\' \
                'python_testing\\{}-{}\\'.format(test_year, test_cruise_num)
@@ -3308,13 +3241,13 @@ def test_process():
     # first_step(test_dir, test_year, test_cruise_num, test_event_start, 'ALL', 'rsk',
     #            num_profiles)
 
-    second_step(test_dir, test_year, test_cruise_num, processing_report_name,
-                test_file, window_width=3, filter_type=1, verbose=True)
+    # second_step(test_dir, test_year, test_cruise_num, processing_report_name,
+    #             test_file, window_width=3, filter_type=1, verbose=True)
 
-    # PROCESS_RBR(test_dir, test_year, test_cruise_num,
-    #             processing_report_name=processing_report_name, rsk_file=test_file,
-    #             data_file_type='rsk', skipcasts=skipcasts,
-    #             window_width=3, shift_recs_conductivity=2,  # sample_rate=8, time_constant=1 / 8,
-    #             shift_recs_oxygen=-11, verbose=True)
+    PROCESS_RBR(test_dir, test_year, test_cruise_num,
+                processing_report_name=processing_report_name, rsk_file=test_file,
+                data_file_type='excel', skipcasts=skipcasts,
+                window_width=3, shift_recs_conductivity=2,  # sample_rate=8, time_constant=1 / 8,
+                shift_recs_oxygen=-11, verbose=True)
 
     return
