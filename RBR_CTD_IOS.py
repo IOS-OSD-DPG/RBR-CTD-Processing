@@ -133,7 +133,9 @@ def READ_RSK(dest_dir: str, year: str, cruise_number: str,
         - dest_dir
         - year
         - cruise_number:
-        - skipcasts
+        - skipcasts: number of casts to skip over in an rsk file when writing data to output format.
+            Input format as either an integer or as a list-like object with one integer per excel file
+            representing the number of initial casts to skip in each excel file.
         - rsk_time1, rsk_time2
     Outputs:
         - csv file: csv files containing the profile data
@@ -1611,6 +1613,7 @@ def FILTER(var_downcast: dict, var_upcast: dict, metadata_dict: dict,
     var1 = deepcopy(var_downcast)
     var2 = deepcopy(var_upcast)
 
+    # Filter select variables in each cast
     for cast_i in var1.keys():
         var1[cast_i].Temperature = signal.filtfilt(b, a, var1[cast_i].Temperature)
         var1[cast_i].Conductivity = signal.filtfilt(b, a, var1[cast_i].Conductivity)
@@ -1744,20 +1747,23 @@ def SHIFT_CONDUCTIVITY(var_downcast: dict, var_upcast: dict,
 
 
 def plot_shift_c(cast_d_shift_c: dict, cast_u_shift_c: dict,
-                 cast_d_filtered: dict, cast_u_filtered: dict, dest_dir: str) -> None:
+                 cast_d_filtered: dict, cast_u_filtered: dict,
+                 dest_dir: str) -> None:
     """
     Plot Salinity and T-S to check the index after shift
     inputs:
-        - cast_d_shift_c
-        - cast_d_filtered
+        - cast_d_shift_c, cast_u_shift_c: downcast and upcast data dictionaries
+        - cast_d_filtered, cast_u_filtered: downcast and upcast data dictionaries
+        - dest_dir:
+    outputs:
+        - profile plots of salinity and T-S plots before and after shifting conductivity and
+        recalculating salinity
     """
 
     # Create a folder for figures if it doesn't already exist
     figure_dir = os.path.join(dest_dir, 'FIG')
     if not os.path.exists(figure_dir):
         os.makedirs(figure_dir)
-
-    # num_casts = len(cast_d_filtered)
 
     fig, ax = plt.subplots()  # Before
     for cast_i in cast_d_filtered.keys():
@@ -1853,9 +1859,18 @@ def SHIFT_OXYGEN(var_downcast: dict, var_upcast: dict,
 
 
 def plot_shift_o(cast_d_shift_o: dict, cast_u_shift_o: dict,
-                 cast_d_shift_c: dict, cast_u_shift_c: dict, dest_dir):
-    """Check Oxy plots after shift. Plot temperature vs oxygen saturation
-    before and after the shift to confirm that the alignment has improved"""
+                 cast_d_shift_c: dict, cast_u_shift_c: dict,
+                 dest_dir: str) -> None:
+    """
+    Check Oxy plots after shift. Plot temperature vs oxygen saturation
+    before and after the shift to confirm that the alignment has improved
+    inputs:
+        - cast_d_shift_o, cast_u_shift_o: downcast and upcast data dictionaries (after o shift)
+        - cast_d_shift_c, cast_u_shift_c: downcast and upcast data dictionaries (before o shift)
+        - dest_dir
+    outputs:
+        - Profile plots of oxygen before and after shifting oxygen
+    """
 
     # Create a folder for figures if it doesn't already exist
     figure_dir = os.path.join(dest_dir, 'FIG')
@@ -1900,14 +1915,15 @@ def plot_shift_o(cast_d_shift_o: dict, cast_u_shift_o: dict,
 
 
 def DERIVE_OXYGEN_CONCENTRATION(var_downcast: dict, var_upcast: dict,
-                                metadata_dict: dict):
+                                metadata_dict: dict) -> tuple:
     """
     Derive oxygen concentration in umol/kg and mL/L from oxygen percent saturation.
     inputs:
-        - var_downcast, var_upcast
+        - var_downcast, var_upcast: downcast and upcast data dictionaries
         - metadata_dict
     outputs:
-        - var1, var2
+        - downcast and upcast data dictionaries with derived oxygen concentration
+        variables added
     """
     umol_L_to_mL_L = 1 / 44.6596
     m3_to_L = 1e3
@@ -2079,11 +2095,12 @@ def DERIVE_OXYGEN_CONCENTRATION(var_downcast: dict, var_upcast: dict,
 
 
 def DELETE_PRESSURE_REVERSAL(var_downcast: dict, var_upcast: dict,
-                             metadata_dict: dict):
+                             metadata_dict: dict) -> tuple:
     """
      Detect and delete pressure reversal
      Inputs:
-         - downcast and upcast data dictionaries, metadata dictionary
+         - downcast and upcast data dictionaries
+         - metadata dictionary
      Outputs:
          - two dictionaries containing downcast and upcast profiles
      """
@@ -2120,10 +2137,17 @@ def DELETE_PRESSURE_REVERSAL(var_downcast: dict, var_upcast: dict,
     return var1, var2
 
 
-def plot_delete(cast_d_wakeeffect: dict, cast_d_shift_o: dict, dest_dir: str):
+def plot_delete(cast_d_wakeeffect: dict, cast_d_shift_o: dict,
+                dest_dir: str) -> None:
     """
     Plot downcast profiles before and after removing pressure reversals (delete step)
     Plot all variables including derived oxygen concentration if available
+    inputs:
+        - cast_d_wakeeffect: dictionary containing downcast data after the delete step
+        - cast_d_shift_o: dictionary containing downcast data before the delete step
+        - dest_dir: working and output directory
+    outputs:
+        - profile plots of all available variables plus T-S plots comparing before and after delete
     """
     # Create a folder for figures if it doesn't already exist
     figure_dir = os.path.join(dest_dir, 'FIG')
@@ -2173,8 +2197,8 @@ def plot_delete(cast_d_wakeeffect: dict, cast_d_shift_o: dict, dest_dir: str):
             plt.savefig(os.path.join(figure_dir, f'After_Delete_{var_abbrev}.png'))
             plt.close(fig)
 
-    # --------------TS Plots--------------
-    fig, ax = plt.subplots()
+    # TS Plots
+    fig, ax = plt.subplots()  # Before
     for cast_i in cast_d_shift_o.keys():
         ax.plot(cast_d_shift_o[cast_i].Salinity,
                 cast_d_shift_o[cast_i].Temperature, color='blue')
@@ -2185,7 +2209,7 @@ def plot_delete(cast_d_wakeeffect: dict, cast_d_shift_o: dict, dest_dir: str):
     plt.savefig(os.path.join(figure_dir, 'Before_Delete_T-S.png'))
     plt.close(fig)
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots()  # After
     for cast_i in cast_d_wakeeffect.keys():
         ax.plot(cast_d_wakeeffect[cast_i].Salinity,
                 cast_d_wakeeffect[cast_i].Temperature, color='blue')
@@ -2198,9 +2222,8 @@ def plot_delete(cast_d_wakeeffect: dict, cast_d_shift_o: dict, dest_dir: str):
     return
 
 
-# ------------------------------  Step 14: bin averages  --------------------------------
-# input variables: cast_d_wakeeffect, cast_u_wakeeffect
-def BINAVE(var_downcast: dict, var_upcast: dict, metadata_dict: dict, interval=1):
+def BINAVE(var_downcast: dict, var_upcast: dict, metadata_dict: dict,
+           interval=1) -> tuple:
     """
      Bin average the profiles
      Note: Bin width and spacing are both universally chosen to be 1m in coastal waters
@@ -2335,11 +2358,13 @@ def FINAL_EDIT(var_cast: dict, have_oxy: bool, have_fluor: bool,
     return var
 
 
-def plot_processed(cast_final: dict, dest_dir: str):
+def plot_processed(cast_final: dict, dest_dir: str) -> None:
     """Final plots: Plot the processed casts after bin averaging
     inputs:
         - cast_final: output from FINAL_EDIT() function
-
+        - dest_dir: working and output directory
+    outputs:
+        - profile plots of all available channels plus a T-S plot
     """
     # Create a folder for figures if it doesn't already exist
     figure_dir = os.path.join(dest_dir, 'FIG')
@@ -2396,13 +2421,18 @@ def plot_processed(cast_final: dict, dest_dir: str):
 
 
 def write_file(cast_number, cast_original: dict, cast_final: dict,
-               metadata_dict: dict, have_fluor: bool, have_oxy: bool):
+               metadata_dict: dict, have_fluor: bool, have_oxy: bool) -> None:
     """
      Write file section of IOS header file
      Inputs:
          - cast_number, cast_original = cast,
            cast_final = cast_d_final,
-           metadata_dict = metadata, have_oxy
+           metadata_dict = metadata
+         - have_fluor, have_oxy: boolean flags; True if fluorescence and oxygen data
+         are present in the dataset, respectively
+     Outputs:
+         - File information added to IOS header file that is open, but nothing returned
+         by the function
      """
 
     # vars = list(dict.fromkeys(cast_original['cast1']))
@@ -2445,17 +2475,18 @@ def write_file(cast_number, cast_original: dict, cast_final: dict,
     #                   channel_width, channel_format, channel_type, channel_decimal_places)}
 
     # Column names no longer changed in FINAL_EDIT()
-    channel_dict = {'Pressure': ('Pressure', "decibar", False, nan, 7, 'F', 'R4', 1),
-                    'Depth': ('Depth', 'metres', False, nan, 7, 'F', 'R4', 1),
-                    'Temperature': ('Temperature', "'deg C (ITS90)'", False, nan, 9, 'F', 'R4', 4),
-                    'Salinity': ('Salinity', "PSS-78", '%.04f', nan, 9, 'F', 'R4', 4),
-                    'Fluorescence': ('Fluorescence:URU', "mg/m^3", '%.03f', nan, 8, 'F', 'R4', 3),
-                    'Oxygen': ('Oxygen:Dissolved:Saturation:RBR', "%", '%.04f', nan, 8, 'F', 'R4', 2),
-                    'Oxygen_mL_L': ('Oxygen:Dissolved:RBR', "mL/L", '%.04f', nan, 8, 'F', 'R4', 2),
-                    'Oxygen_umol_kg': ('Oxygen:Dissolved:RBR', "umol/kg", '%.04f', nan, 8, 'F', 'R4', 2),
-                    'Conductivity': ('Conductivity', "S/m", '%.05f', nan, 10, 'F', 'R4', 6),
-                    'Observation_counts': ('Number_of_bin_records', "n/a", False, "' '", 5, "I", "I", 0)
-                    }
+    channel_dict = {
+        'Pressure': ('Pressure', "decibar", False, nan, 7, 'F', 'R4', 1),
+        'Depth': ('Depth', 'metres', False, nan, 7, 'F', 'R4', 1),
+        'Temperature': ('Temperature', "'deg C (ITS90)'", False, nan, 9, 'F', 'R4', 4),
+        'Salinity': ('Salinity', "PSS-78", '%.04f', nan, 9, 'F', 'R4', 4),
+        'Fluorescence': ('Fluorescence:URU', "mg/m^3", '%.03f', nan, 8, 'F', 'R4', 3),
+        'Oxygen': ('Oxygen:Dissolved:Saturation:RBR', "%", '%.04f', nan, 8, 'F', 'R4', 2),
+        'Oxygen_mL_L': ('Oxygen:Dissolved:RBR', "mL/L", '%.04f', nan, 8, 'F', 'R4', 2),
+        'Oxygen_umol_kg': ('Oxygen:Dissolved:RBR', "umol/kg", '%.04f', nan, 8, 'F', 'R4', 2),
+        'Conductivity': ('Conductivity', "S/m", '%.05f', nan, 10, 'F', 'R4', 6),
+        'Observation_counts': ('Number_of_bin_records', "n/a", False, "' '", 5, "I", "I", 0)
+    }
 
     # Remove unavailable channels
     if not have_fluor:
@@ -2519,11 +2550,14 @@ def write_file(cast_number, cast_original: dict, cast_final: dict,
     return
 
 
-def write_admin(metadata_dict: dict):
+def write_admin(metadata_dict: dict) -> None:
     """
     function to write administation section of IOS header file
     inputs:
         - metadata_dict: dictionary containing metadata for the RBR CTD
+    outputs:
+        - Administration section added to open IOS header file, but nothing returned
+        by the function
     """
     mission = metadata_dict["Mission"]
     agency = metadata_dict["Agency"]
@@ -2542,14 +2576,15 @@ def write_admin(metadata_dict: dict):
     return
 
 
-def write_location(cast_number: int, metadata_dict: dict):
+def write_location(cast_number: int, metadata_dict: dict) -> None:
     """
      write location part in IOS header file
      Inputs:
          - cast_number
          - metadata_dict: dictionary containing metadata for the RBR CTD
      Outputs:
-         - part of txt file
+         - location section added to open IOS header file, but nothing returned
+         by the function
      """
     station = metadata_dict['Location']['LOC:STATION'].to_numpy()
     event_number = metadata_dict['Location']['LOC:Event Number'].to_numpy()
@@ -2594,10 +2629,13 @@ def write_location(cast_number: int, metadata_dict: dict):
     return
 
 
-def write_instrument(metadata_dict: dict):
+def write_instrument(metadata_dict: dict) -> None:
     """function to write instrument info
     inputs:
         - metadata_dict: dictionary containing metadata for the RBR CTD
+    outputs:
+        - Instrument section added to open IOS header file, but nothing returned
+        by the function
     """
     model = metadata_dict['Instrument_Model']
     if int(metadata_dict['Serial_number']) < 1000:
@@ -2637,84 +2675,88 @@ def write_history(have_oxy: bool,
         - cast_final:
         - cast_number:
         - metadata_dict: dictionary containing metadata for the RBR CTD
-    outputs: nothing
+    outputs:
+        - history section added to open IOS header file, but nothing returned
+        by the function
     """
 
+    time_format = "%Y/%m/%d %H:%M:%S.%f"
     print("*HISTORY")
     print()
     print("    $TABLE: PROGRAMS")
     print("    !   Name     Vers   Date       Time     Recs In   Recs Out")
     print("    !   -------- ------ ---------- -------- --------- ---------")
     print("        Z ORDER  " + '{:7}'.format(str(1.0))
-          + '{:11}'.format(metadata_dict['ZEROORDER_Time'].strftime("%Y/%m/%d %H:%M:%S.%f")[0:-7].split(" ")[0])
-          + '{:9}'.format(metadata_dict['ZEROORDER_Time'].strftime("%Y/%m/%d %H:%M:%S.%f")[0:-7].split(" ")[1])
+          + '{:11}'.format(metadata_dict['ZEROORDER_Time'].strftime(time_format)[0:-7].split(" ")[0])
+          + '{:9}'.format(metadata_dict['ZEROORDER_Time'].strftime(time_format)[0:-7].split(" ")[1])
           + '{:>9}'.format(str(cast_original['cast' + str(cast_number)].shape[0]))
           + '{:>10}'.format(str(cast_original['cast' + str(cast_number)].shape[0])))
     print("        CALIB    " + '{:7}'.format(str(1.0))
-          + '{:11}'.format(metadata_dict['CALIB_Time'].strftime("%Y/%m/%d %H:%M:%S.%f")[0:-7].split(" ")[0])
-          + '{:9}'.format(metadata_dict['CALIB_Time'].strftime("%Y/%m/%d %H:%M:%S.%f")[0:-7].split(" ")[1])
+          + '{:11}'.format(metadata_dict['CALIB_Time'].strftime(time_format)[0:-7].split(" ")[0])
+          + '{:9}'.format(metadata_dict['CALIB_Time'].strftime(time_format)[0:-7].split(" ")[1])
           + '{:>9}'.format(str(cast_original['cast' + str(cast_number)].shape[0]))
           + '{:>10}'.format(str(cast_original['cast' + str(cast_number)].shape[0])))
     print("        CLIP     " + '{:7}'.format(str(1.0))
           + '{:11}'.format(
-        metadata_dict['CLIP_D_Time' + str(cast_number)].strftime("%Y/%m/%d %H:%M:%S.%f")[0:-7].split(" ")[0])
+        metadata_dict['CLIP_D_Time' + str(cast_number)].strftime(time_format)[0:-7].split(" ")[0])
           + '{:9}'.format(
-        metadata_dict['CLIP_D_Time' + str(cast_number)].strftime("%Y/%m/%d %H:%M:%S.%f")[0:-7].split(" ")[1])
+        metadata_dict['CLIP_D_Time' + str(cast_number)].strftime(time_format)[0:-7].split(" ")[1])
           + '{:>9}'.format(str(cast_original['cast' + str(cast_number)].shape[0]))
           + '{:>10}'.format(str(cast_clip['cast' + str(cast_number)].shape[0])))
     print("        FILTER   " + '{:7}'.format(str(1.0))
-          + '{:11}'.format(metadata_dict['FILTER_Time'].strftime("%Y/%m/%d %H:%M:%S.%f")[0:-7].split(" ")[0])
-          + '{:9}'.format(metadata_dict['FILTER_Time'].strftime("%Y/%m/%d %H:%M:%S.%f")[0:-7].split(" ")[1])
+          + '{:11}'.format(metadata_dict['FILTER_Time'].strftime(time_format)[0:-7].split(" ")[0])
+          + '{:9}'.format(metadata_dict['FILTER_Time'].strftime(time_format)[0:-7].split(" ")[1])
           + '{:>9}'.format(str(cast_clip['cast' + str(cast_number)].shape[0]))
           + '{:>10}'.format(str(cast_filtered['cast' + str(cast_number)].shape[0])))
     print("        SHIFT    " + '{:7}'.format(str(1.0))
           + '{:11}'.format(
-        metadata_dict['SHIFT_Conductivity_Time'].strftime("%Y/%m/%d %H:%M:%S.%f")[0:-7].split(" ")[0])
+        metadata_dict['SHIFT_Conductivity_Time'].strftime(time_format)[0:-7].split(" ")[0])
           + '{:9}'.format(
-        metadata_dict['SHIFT_Conductivity_Time'].strftime("%Y/%m/%d %H:%M:%S.%f")[0:-7].split(" ")[1])
+        metadata_dict['SHIFT_Conductivity_Time'].strftime(time_format)[0:-7].split(" ")[1])
           + '{:>9}'.format(str(cast_filtered['cast' + str(cast_number)].shape[0]))
           + '{:>10}'.format(str(cast_shift_c['cast' + str(cast_number)].shape[0])))
     if have_oxy:
         # Add entries for oxygen saturation shift and oxygen concentration derivation
         print("        SHIFT    " + '{:7}'.format(str(1.0))
               + '{:11}'.format(
-            metadata_dict['SHIFT_Oxygen_Time'].strftime("%Y/%m/%d %H:%M:%S.%f")[0:-7].split(" ")[0])
+            metadata_dict['SHIFT_Oxygen_Time'].strftime(time_format)[0:-7].split(" ")[0])
               + '{:9}'.format(
-            metadata_dict['SHIFT_Oxygen_Time'].strftime("%Y/%m/%d %H:%M:%S.%f")[0:-7].split(" ")[1])
+            metadata_dict['SHIFT_Oxygen_Time'].strftime(time_format)[0:-7].split(" ")[1])
               + '{:>9}'.format(str(cast_shift_c['cast' + str(cast_number)].shape[0]))
               + '{:>10}'.format(str(cast_shift_o['cast' + str(cast_number)].shape[0])))
         print("        DERIVE   " + '{:7}'.format(str(1.0))
               + '{:11}'.format(
-            metadata_dict['DERIVE_OXYGEN_CONCENTRATION_Time'].strftime("%Y/%m/%d %H:%M:%S.%f")[0:-7].split(" ")[0])
+            metadata_dict['DERIVE_OXYGEN_CONCENTRATION_Time'].strftime(time_format)[0:-7].split(" ")[0])
               + '{:9}'.format(
-            metadata_dict['DERIVE_OXYGEN_CONCENTRATION_Time'].strftime("%Y/%m/%d %H:%M:%S.%f")[0:-7].split(" ")[1])
+            metadata_dict['DERIVE_OXYGEN_CONCENTRATION_Time'].strftime(time_format)[0:-7].split(" ")[1])
               + '{:>9}'.format(str(cast_shift_o['cast' + str(cast_number)].shape[0]))
               + '{:>10}'.format(str(cast_d_o_conc['cast' + str(cast_number)].shape[0])))
         print("        DELETE   " + '{:7}'.format(str(1.0))
               + '{:11}'.format(
-            metadata_dict['DELETE_PRESSURE_REVERSAL_Time'].strftime("%Y/%m/%d %H:%M:%S.%f")[0:-7].split(" ")[0])
+            metadata_dict['DELETE_PRESSURE_REVERSAL_Time'].strftime(time_format)[0:-7].split(" ")[0])
               + '{:9}'.format(
-            metadata_dict['DELETE_PRESSURE_REVERSAL_Time'].strftime("%Y/%m/%d %H:%M:%S.%f")[0:-7].split(" ")[1])
+            metadata_dict['DELETE_PRESSURE_REVERSAL_Time'].strftime(time_format)[0:-7].split(" ")[1])
               + '{:>9}'.format(str(cast_shift_o['cast' + str(cast_number)].shape[0]))
               + '{:>10}'.format(str(cast_wakeeffect['cast' + str(cast_number)].shape[0] -
                                     list(cast_wakeeffect['cast' + str(cast_number)].isna().sum())[0])))
     else:
         print("        DELETE   " + '{:7}'.format(str(1.0))
               + '{:11}'.format(
-            metadata_dict['DELETE_PRESSURE_REVERSAL_Time'].strftime("%Y/%m/%d %H:%M:%S.%f")[0:-7].split(" ")[0])
+            metadata_dict['DELETE_PRESSURE_REVERSAL_Time'].strftime(time_format)[0:-7].split(" ")[0])
               + '{:9}'.format(
-            metadata_dict['DELETE_PRESSURE_REVERSAL_Time'].strftime("%Y/%m/%d %H:%M:%S.%f")[0:-7].split(" ")[1])
+            metadata_dict['DELETE_PRESSURE_REVERSAL_Time'].strftime(time_format)[0:-7].split(" ")[1])
               + '{:>9}'.format(str(cast_shift_c['cast' + str(cast_number)].shape[0]))
               + '{:>10}'.format(str(cast_wakeeffect['cast' + str(cast_number)].shape[0] -
                                     list(cast_wakeeffect['cast' + str(cast_number)].isna().sum())[0])))
+    # The rest applies to all cases
     print("        BINAVE   " + '{:7}'.format(str(1.0))
-          + '{:11}'.format(metadata_dict['BINAVE_Time'].strftime("%Y/%m/%d %H:%M:%S.%f")[0:-7].split(" ")[0])
-          + '{:9}'.format(metadata_dict['BINAVE_Time'].strftime("%Y/%m/%d %H:%M:%S.%f")[0:-7].split(" ")[1])
+          + '{:11}'.format(metadata_dict['BINAVE_Time'].strftime(time_format)[0:-7].split(" ")[0])
+          + '{:9}'.format(metadata_dict['BINAVE_Time'].strftime(time_format)[0:-7].split(" ")[1])
           + '{:>9}'.format(str(cast_wakeeffect['cast' + str(cast_number)].shape[0]))
           + '{:>10}'.format(str(cast_binned['cast' + str(cast_number)].shape[0])))
     print("        EDIT     " + '{:7}'.format(str(1.0))
-          + '{:11}'.format(metadata_dict['FINALEDIT_Time'].strftime("%Y/%m/%d %H:%M:%S.%f")[0:-7].split(" ")[0])
-          + '{:9}'.format(metadata_dict['FINALEDIT_Time'].strftime("%Y/%m/%d %H:%M:%S.%f")[0:-7].split(" ")[1])
+          + '{:11}'.format(metadata_dict['FINALEDIT_Time'].strftime(time_format)[0:-7].split(" ")[0])
+          + '{:9}'.format(metadata_dict['FINALEDIT_Time'].strftime(time_format)[0:-7].split(" ")[1])
           + '{:>9}'.format(str(cast_binned['cast' + str(cast_number)].shape[0]))
           + '{:>10}'.format(str(cast_final['cast' + str(cast_number)].shape[0])))
 
@@ -2729,12 +2771,15 @@ def write_history(have_oxy: bool,
     return
 
 
-def write_comments(have_fluor: bool, have_oxy: bool, processing_report_name: str):
+def write_comments(have_fluor: bool, have_oxy: bool, processing_report_name: str) -> None:
     """Write comments section in the IOS header file
     inputs:
         - have_fluor: boolean flag, True if fluorescence channel is available
         - have_oxy: boolean flag, True if oxygen channels are available
         - processing_report_name: name of the RBR processing report for the selected cruise
+    outputs:
+        - Comments section added to open IOS header file, but nothing returned by
+        the function
     """
     # cruise_ID = metadata_dict["Mission"]
     print("*COMMENTS")
@@ -2786,16 +2831,20 @@ def write_comments(have_fluor: bool, have_oxy: bool, processing_report_name: str
         print("!                                          ords")
         print("!------ ------ -------- -------- --------- ----")
         print("*END OF HEADER")
-        return
+
+    return
 
 
-def write_data(have_fluor: bool, have_oxy: bool, cast_data: dict, cast_number: int):  # , cast_d):
-    """Write data to header file, taking into account if fluorescence and oxygen data are there
+def write_data(have_fluor: bool, have_oxy: bool, cast_data: dict, cast_number: int) -> None:  # , cast_d):
+    """
+    Write data to header file, taking into account if fluorescence and oxygen data are there
     inputs:
         - have_fluor: boolean flag, True if fluorescence channel is available
         - have_oxy: boolean flag, True if oxygen channels are available
         - cast_data: dictionary containing the processed data for the selected cast
         - cast_number: the event number for the cast
+    outputs:
+        - Data values printed to open IOS header file, but nothing returned by the function
     """
     if have_fluor and have_oxy:
         for i in range(len(cast_data['cast' + str(cast_number)])):
@@ -2841,6 +2890,7 @@ def write_data(have_fluor: bool, have_oxy: bool, cast_data: dict, cast_number: i
                   + '{:>8}'.format(cast_data['cast' + str(cast_number)].loc[i, 'Salinity']) + " "
                   + '{:>9}'.format(cast_data['cast' + str(cast_number)].loc[i, 'Conductivity']) + " "
                   + '{:>4}'.format(cast_data['cast' + str(cast_number)].loc[i, 'Observation_counts']) + " ")
+
     return
 
 
@@ -2848,7 +2898,7 @@ def main_header(dest_dir, n_cast: int, metadata_dict: dict, cast: dict,
                 cast_d: dict, cast_d_clip: dict, cast_d_filtered: dict,
                 cast_d_shift_c: dict, cast_d_shift_o: dict, cast_d_o_conc: dict,
                 cast_d_wakeeffect: dict, cast_d_binned: dict, cast_d_final: dict,
-                have_fluor: bool, have_oxy: bool, processing_report_name: str):
+                have_fluor: bool, have_oxy: bool, processing_report_name: str) -> str:
     """
     Main function for creating an IOS header file containing final processed RBR CTD data
     inputs:
@@ -2907,6 +2957,7 @@ def main_header(dest_dir, n_cast: int, metadata_dict: dict, cast: dict,
         sys.stdout.flush()  # Recommended by Tom
     finally:
         sys.stdout = orig_stdout
+
     return os.path.abspath(output)
 
 
@@ -2952,20 +3003,20 @@ def get_started(dest_dir: str):
 
 def first_step(dest_dir, year: str, cruise_number: str, data_file_type: str,
                skipcasts, rsk_time1=None, rsk_time2=None,
-               left_lon=None, right_lon=None, bot_lat=None, top_lat=None):
+               left_lon=None, right_lon=None, bot_lat=None, top_lat=None) -> None:
     """
-    Choose how to export the csv files from the rsk files
+    Choose how to export the csv files from the rsk files, in preparation for processing
     Plot cruise, plot pre-processing plots, determine need for zero-order holds correction
-    if multi_file choose an rsk_file for metadata
 
      inputs:
-        - dest_dir, yearm cruise_number
-        - event_start:
-        - all_last: "all" (ingest all casts in each raw file) or "last" (ingest
-        only last cast)
+        - dest_dir, year, cruise_number
+        - data_file_type: 'rsk' for *.rsk files or 'excel' for *.xlsx type files
+        - skipcasts: number of casts to skip over in each data file (rsk or excel)
+            when writing data to output format. Input format as either an integer
+            or as a list-like object with one integer per excel file
+            representing the number of initial casts to skip in each excel file.
         - data_file_type: "rsk" for single or multiple rsk files, or "excel"
         (use on .xlsx files exported from Ruskin)
-        - nprof_per_rsk: number of profiles per .rsk file as per the CTD or cruise log
         - left_lon, right_lon, bot_lat, top_lat: map extent for plotting cast locations
      Outputs:
         - None in terms of python objects, but data files and plots are saved
@@ -2999,15 +3050,16 @@ def second_step(dest_dir: str, year: str, cruise_number: str,
                 filter_type=1, shift_recs_conductivity=2,
                 shift_recs_oxygen=-11, verbose: bool = False):
     """
-    Make corrections for zero-order holds and Pressure if needed
-    zoh is zero-order holds correction
+    Run the processing steps for RBR CTD data
     inputs:
         - dest_dir
         - year
         - cruise_number
         - correction_value: value to correct pressure and depth data by using CALIB
         - input_ext: '_CTD_DATA-6linehdr.csv' or '_CTD_DATA-6linehdr_corr_hold.csv'
-    outputs: none
+    outputs:
+        - IOS header-format files containing processed RBR CTD data are saved to
+        dest_dir/CTD/. This function itself does not return anything
     """
 
     # Create metadata dict
@@ -3193,7 +3245,10 @@ def PROCESS_RBR(dest_dir, year: str, cruise_number: str,
         - cruise_number: 3-character string, e.g., '015', '101'
         - processing_report_name
         - rsk_file: relative file name of an rsk file in the dest_dir
-        - skipcasts
+        - skipcasts: number of casts to skip over in each data file (rsk or excel)
+            when writing data to output format. Input format as either an integer
+            or as a list-like object with one integer per excel file
+            representing the number of initial casts to skip in each excel file.
         - data_file_type: 'rsk' for ruskin files or "excel"
         (use on .xlsx files exported from Ruskin)
         - nprof_per_rsk: int or list-like if multiple input rsk data files
