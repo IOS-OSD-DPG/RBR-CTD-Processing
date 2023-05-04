@@ -3797,17 +3797,22 @@ def main_header(
     Main function for creating an IOS header file containing final processed RBR CTD data
     inputs:
         - dest_dir: working directory that output files are saved to
-        - n_cast
+        - n_cast: cast/event number
         - metadata_dict: dictionary containing metadata for the selected RBR cruise
-        - cast: dictionary containing the original raw data from both the upcast and downcast
+        - cast: dictionary containing the original raw data from both the upcast and
+        downcast
         - cast_d: dictionary containing the original raw data from the downcast only
         - cast_d_clip: dictionary containing the clipped downcast data
         - cast_d_filtered: dictionary containing the low-pass filtered downcast data
-        - cast_d_shift_c: dictionary containing the downcast data that had conductivity shifted
+        - cast_d_shift_c: dictionary containing the downcast data that had conductivity
+        shifted
         - cast_d_shift_o: dictionary containing the downcast data that had oxygen shifted
-        - cast_d_wakeeffect: dictionary containing the downcast data that had pressure reversals deleted
-        - cast_d_binned: dictionary containing the downcast data that was binned into 1dbar vertical bins
-        - cast_d_final: dictionary containing the final processed data, with conductivity in units of S/m
+        - cast_d_wakeeffect: dictionary containing the downcast data that had pressure
+        reversals deleted
+        - cast_d_binned: dictionary containing the downcast data that was binned into
+        1dbar vertical bins
+        - cast_d_final: dictionary containing the final processed data, with conductivity
+        in units of S/m
         - have_fluor: boolean flag, True if fluorescence channel is available
         - have_oxy: boolean flag, True if oxygen channels are available
     outputs:
@@ -4319,7 +4324,7 @@ def test_process():
         test_cruise_num,
         processing_report_name=processing_report_name,
         rsk_file=test_file,
-        data_file_type="excel",
+        data_file_type="rsk",
         skipcasts=skipcasts,
         window_width=3,
         shift_recs_conductivity=2,  # sample_rate=8, time_constant=1 / 8,
