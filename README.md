@@ -1,43 +1,46 @@
 # RBR-CTD-Processing
-To process raw RBR CTD data in Python. 
+To process raw RBR CTD data in Python. The main reference for this routine is Halverson et al. (2017). 
 
 RBR_Processing.py is deprecated and has been replaced by RBR_CTD_IOS.py.
 
-RBR_CTD_IOS.py contains processing steps:
+RBR_CTD_IOS.py contains the following processing steps, which are accompanied by before/after plots.
 
-- Export raw data from .rsk to .csv files
+- Export raw data from .rsk or .xlsx to .csv files
 
-- Create Metadata dictionary
+- Create metadata dictionary
 
 - Prepare CTD_DATA.csv with 6 line headers for IOSShell
 
 - Plot and check profile locations
 
-- Plot and Check for zero-order hold
+- Plot first-order pressure differences to check need for zero-order hold
 
-- CALIB: Pressure/Depth correction
+- (If needed) Correct for zero-order holds by replacing holds with NaNs
 
-- CLIP: remove measurements near sea surface and bottom
+- (If needed) CALIB: Pressure/Depth correction if there are negative pressure values with corresponding conductivity values above about 30 mS/cm
 
-- FILTER: apply a low pass filter
+- CLIP: Remove measurements near sea surface and bottom
 
-- SHIFT: shift conductivity and recalculate salinity
+- FILTER: Apply a low pass filter to pressure, temperature, conductivity, and fluorescence (if available)
 
-- SHIFT: shift oxygen
+- SHIFT: Shift conductivity and recalculate salinity
 
-- DELETE: remove the pressure reversal
+- SHIFT: Shift oxygen saturation
 
-- BINAVE: calculate bin averages
+- DERIVE: Derive oxygen concentration in mL/L and umol/kg from oxygen saturation following SCOR WG 142
 
-- EDIT: apply final editing
+- DELETE: Remove pressure reversals
 
-- Prepare .ctd files with IOS Header File
+- BINAVE: Average the data into 1-dbar bins
+
+- EDIT: Apply final editing, including converting conductivity units from mS/cm to S/m
+
+- Prepare .ctd files following the IOS Header file ASCII format
 
 ##### Requirements
 - Python >= 3.8
 - pyrsktools >= 1.1.1
-- Hakai ocean-data-parser package for converting oxygen saturation:\
-`pip install git+https://github.com/HakaiInstitute/ocean-data-parser.git`
+- Hakai ocean-data-parser package for converting oxygen saturation: https://github.com/HakaiInstitute/ocean-data-parser
 
 ##### References
 Halverson, M., Jackson, J., Richards, C., Melling, H., Brunsting, R., 
