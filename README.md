@@ -17,6 +17,8 @@ RBR_CTD_IOS.py contains the following processing steps, which are accompanied by
 
 - (If needed) Correct for zero-order holds by replacing holds with NaNs
 
+- (If needed) Correct for any time offsets in casts by adding a correction value in units of hours
+
 - (If needed) CALIB: Pressure/Depth correction if there are negative pressure values with corresponding conductivity values above about 30 mS/cm
 
 - CLIP: Remove measurements near sea surface and bottom
@@ -32,6 +34,8 @@ RBR_CTD_IOS.py contains the following processing steps, which are accompanied by
 - DELETE: Remove pressure reversals
 
 - BINAVE: Average the data into 1-dbar bins
+
+- (If needed) Remove select channels from select casts if the data are useless 
 
 - EDIT: Apply final editing, including converting conductivity units from mS/cm to S/m
 
