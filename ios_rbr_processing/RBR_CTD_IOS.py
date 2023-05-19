@@ -1131,6 +1131,83 @@ def format_processing_plot(
     return
 
 
+def do_ts_plot(
+        figure_dir: str, plot_title: str, figure_filename: str, cast_d: dict, cast_u=None,
+):
+    """Do T-S plot with isopycnal lines
+    Reference: https://github.com/larsonjl/earth_data_tools/
+    """
+    fig, ax = plt.subplots()
+
+    cast_numbers = [cast_i for cast_i in cast_d.keys()]
+
+    # Initialize the min / max values for plotting isopycnals
+    t_min = cast_d[cast_numbers[0]].Temperature.min()
+    t_max = cast_d[cast_numbers[0]].Temperature.max()
+    s_min = cast_d[cast_numbers[0]].Salinity.min()
+    s_max = cast_d[cast_numbers[0]].Salinity.max()
+
+    # Plot each cast
+    for cast_i in cast_numbers:
+        ax.plot(cast_d[cast_i].Salinity, cast_d[cast_i].Temperature, color="b")
+
+        # Update temperature and salinity ranges
+        t_min = min(t_min, cast_d[cast_i].Temperature.min())
+        t_max = max(t_max, cast_d[cast_i].Temperature.max())
+        s_min = min(s_min, cast_d[cast_i].Salinity.min())
+        s_max = max(s_max, cast_d[cast_i].Salinity.max())
+
+        if cast_u is not None:
+            ax.plot(cast_u[cast_i].Salinity, cast_u[cast_i].Temperature, color="b")
+
+            # Update temperature and salinity ranges
+            t_min = min(t_min, cast_u[cast_i].Temperature.min())
+            t_max = max(t_max, cast_u[cast_i].Temperature.max())
+            s_min = min(s_min, cast_u[cast_i].Salinity.min())
+            s_max = max(s_max, cast_u[cast_i].Salinity.max())
+
+    # Finalize the min / max values for plotting isopycnals
+    t_min -= 1
+    t_max += 1
+    s_min -= 1
+    s_max += 1
+
+    # Calculate how many gridcells we need in the x and y dimensions
+    xdim = int(np.ceil(s_max - s_min) / 0.1)
+    ydim = int(np.ceil(t_max - t_min))
+    dens = np.zeros((ydim, xdim))
+
+    # Create temp and salt vectors of appropiate dimensions
+    ti = np.linspace(0, ydim, ydim) + t_min
+    si = np.linspace(1, xdim, xdim) * 0.1 + s_min
+
+    # Loop to fill in grid with densities
+    for j in range(0, int(ydim)):
+        for i in range(0, int(xdim)):
+            dens[j, i] = gsw.rho(si[i], ti[j], 0)
+
+    # Subtract 1000 to convert to sigma-t
+    sigmat = dens - 1000
+
+    # Add the isopycnal contour lines to the plot
+    CS = ax.contour(si, ti, sigmat, linestyles='dashed', colors='k')
+    plt.clabel(CS, fontsize=12, inline=1, fmt='%.2f')  # Label every second level
+
+    # Do final plot formatting
+    format_processing_plot(
+        ax,
+        x_var_name="Salinity",
+        x_var_units="PSS-78",
+        y_var_name="Temperature",
+        y_var_units="C",
+        plot_title=plot_title,
+        invert_yaxis=False,
+    )
+    plt.savefig(os.path.join(figure_dir, figure_filename))
+    plt.close(fig)
+    return
+
+
 def plot_by_other(
         year: str, cruise_number: str, dest_dir: str, input_ext: str
 ) -> None:
@@ -1493,21 +1570,9 @@ def first_plots(year: str, cruise_number: str, dest_dir: str, input_ext: str) ->
             plt.savefig(os.path.join(figure_dir, f"Pre_Processing_{var[0]}.png"))
             plt.close(fig)
 
-    # TS Plot
-    fig, ax = plt.subplots()
-    for cast_i in cast.keys():
-        ax.plot(cast_d[cast_i].Salinity, cast_d[cast_i].Temperature, color="b")
-        # label='cast' + str(i + 1))
-        ax.plot(cast_u[cast_i].Salinity, cast_u[cast_i].Temperature, color="b")
-
-    format_processing_plot(
-        ax,
-        x_var_name="Salinity",
-        x_var_units="PSS-78",
-        y_var_name="Temperature",
-        y_var_units="C",
-        plot_title="Pre-Processing T-S Plot",
-        invert_yaxis=False,
+    # TS Plot add labeled isopycnals to T-S plots as in IOS Shell
+    do_ts_plot(
+        figure_dir, "Pre-Processing T-S Plot", "Pre_Processing_T-S.png", cast_d, cast_u
     )
     plt.savefig(os.path.join(figure_dir, "Pre_Processing_T-S.png"))
     plt.close(fig)
@@ -2259,50 +2324,16 @@ def plot_shift_c(
     plt.close(fig)
 
     # TS Plot before
-    fig, ax = plt.subplots()
-    for cast_i in cast_d_filtered.keys():
-        ax.plot(
-            cast_d_filtered[cast_i].Salinity,
-            cast_d_filtered[cast_i].Temperature,
-            color="blue",
-        )
-        # ax.plot(cast_u_filtered['cast1'].Salinity, cast_u_filtered['cast1'].Temperature,
-        #         '--', color='blue',
-        # label='Pre-shift')
-    format_processing_plot(
-        ax,
-        x_var_name="Salinity",
-        x_var_units="PSS-78",
-        y_var_name="Temperature",
-        y_var_units="C",
-        plot_title="Before Shift Conductivity T-S Plot",
-        invert_yaxis=False,
+    do_ts_plot(
+        figure_dir, "Before Shift Conductivity T-S Plot",
+        "Before_Shift_Conductivity_T-S.png", cast_d_filtered, cast_u_filtered,
     )
-    plt.savefig(os.path.join(figure_dir, "Before_Shift_Conductivity_T-S.png"))
-    plt.close(fig)
 
     # T-S plot After
-    fig, ax = plt.subplots()
-    for cast_i in cast_d_filtered.keys():
-        ax.plot(
-            cast_d_shift_c[cast_i].Salinity,
-            cast_d_shift_c[cast_i].Temperature,
-            color="blue",
-        )
-        # ax.plot(cast_u_shift_c['cast1'].Salinity, cast_u_shift_c['cast1'].Temperature,
-        #         '--', color='red',
-        # label='Post-shift')
-    format_processing_plot(
-        ax,
-        x_var_name="Salinity",
-        x_var_units="PSS-78",
-        y_var_name="Temperature",
-        y_var_units="C",
-        plot_title="After Shift Conductivity T-S Plot",
-        invert_yaxis=False,
+    do_ts_plot(
+        figure_dir, "After Shift Conductivity T-S Plot",
+        "After_Shift_Conductivity_T-S.png", cast_d_shift_c, cast_u_shift_c,
     )
-    plt.savefig(os.path.join(figure_dir, "After_Shift_Conductivity_T-S.png"))
-    plt.close(fig)
 
     return
 
@@ -2701,21 +2732,13 @@ def plot_delete(cast_d_wakeeffect: dict, cast_d_shift_o: dict, dest_dir: str) ->
             plt.close(fig)
 
     # TS Plots
-    fig, ax = plt.subplots()  # Before
-    for cast_i in cast_d_shift_o.keys():
-        ax.plot(
-            cast_d_shift_o[cast_i].Salinity,
-            cast_d_shift_o[cast_i].Temperature,
-            color="blue",
-        )
-    format_processing_plot(
-        ax,
-        x_var_name="Salinity",
-        x_var_units="PSS-78",
-        y_var_name="Temperature",
-        y_var_units="C",
-        plot_title="T-S Plot (before delete pressure reversal)",
-        invert_yaxis=False,
+    do_ts_plot(
+        figure_dir, plot_title="T-S Plot (before delete pressure reversal)",
+        figure_filename="Before_Delete_T-S.png", cast_d=cast_d_shift_o
+    )
+    do_ts_plot(
+        figure_dir, plot_title="T-S Plot (after delete pressure reversal)",
+        figure_filename="After_Delete_T-S.png", cast_d=cast_d_wakeeffect
     )
     plt.savefig(os.path.join(figure_dir, "Before_Delete_T-S.png"))
     plt.close(fig)
@@ -2971,24 +2994,10 @@ def plot_processed(cast_final: dict, dest_dir: str) -> None:
             plt.close(fig)
 
     # T-S plot
-    fig, ax = plt.subplots()
-    for cast_i in cast_final.keys():
-        ax.plot(
-            cast_final[cast_i].Salinity.astype(float),
-            cast_final[cast_i].Temperature.astype(float),
-            color="blue",
-        )
-    format_processing_plot(
-        ax,
-        x_var_name="Salinity",
-        x_var_units="PSS-78",
-        y_var_name="Temperature",
-        y_var_units="C",
-        plot_title="Post-Processing T-S Plot",
-        invert_yaxis=False,
+    do_ts_plot(
+        figure_dir, "Post-Processing T-S Plot", "Post_Processing_T-S.png", cast_final
     )
-    plt.savefig(os.path.join(figure_dir, "Post_Processing_T-S.png"))
-    plt.close(fig)
+
     return
 
 
