@@ -477,12 +477,12 @@ def MERGE_FILES(dest_dir: str, year: str, cruise_number: str) -> None:
 
 
 def CREATE_META_DICT(
-    dest_dir: str,
-    rsk_file: str,
-    year: str,
-    cruise_number: str,
-    rsk_time1=None,
-    rsk_time2=None,
+        dest_dir: str,
+        rsk_file: str,
+        year: str,
+        cruise_number: str,
+        rsk_time1=None,
+        rsk_time2=None,
 ) -> dict:
     """
     Read in a csv file and output a metadata dictionary.
@@ -503,6 +503,11 @@ def CREATE_META_DICT(
     rsk.open()
     rsk.readdata(t1=rsk_time1, t2=rsk_time2)
 
+    # Compute the derived channels so as to make number of channels accurate
+    rsk.derivesalinity()
+    rsk.deriveseapressure()
+    rsk.derivedepth()
+
     header_input_name = str(year) + "-" + str(cruise_number) + "_header-merge.csv"
     header_input_filename = dest_dir + header_input_name
     header = pd.read_csv(header_input_filename, header=0)
@@ -517,22 +522,20 @@ def CREATE_META_DICT(
     time_interval = str(time_interval)
     time_interval = time_interval[-8:-3]
 
+    # Metadata file
     csv_input_name = str(year) + "-" + str(cruise_number) + "_METADATA.csv"
     csv_input_filename = dest_dir + csv_input_name
-
     meta_csv = pd.read_csv(csv_input_filename)
 
     # Fill in metadata values
     meta_dict["Processing_Start_time"] = datetime.now()
     meta_dict["Instrument_information"] = rsk.instrument
     meta_dict["Sampling_Interval"] = time_interval
-    print("time_interval", time_interval)
+    # print("time_interval", time_interval)
     # meta_dict['RSK_filename'] = rsk.name
     meta_dict["RSK_filename"] = meta_csv["Value"][
-        meta_csv["Name"] == "RSK_filename"
-    ].values[
-        0:
-    ]  # if more than one (list??)
+                                    meta_csv["Name"] == "RSK_filename"
+                                    ].values[0:]  # if more than one (list??)
     # meta_dict['Channels'] = list(rsk.channels.keys())
     meta_dict["Channels"] = rsk.channelNames
     # meta_dict['Channel_details'] = list(rsk.channels.items())
@@ -555,6 +558,21 @@ def CREATE_META_DICT(
         "Instrument_type",
     ]:
         meta_dict[key] = meta_csv["Value"][meta_csv["Name"] == key].values[0]
+
+    # Fill out the rest of the METADATA.csv file and export it to csv as a record for users
+    meta_csv.loc[meta_csv["Name"] == "Instrument_information", "Value"] = str(
+        meta_dict["Instrument_information"]
+    )
+    meta_csv.loc[meta_csv["Name"] == "Channels", "Value"] = str(meta_dict["Channels"])
+    meta_csv.loc[meta_csv["Name"] == "Channel_details", "Value"] = str(
+        meta_dict["Channel_details"]
+    )
+    meta_csv.loc[meta_csv["Name"] == "Number_of_channels", "Value"] = str(
+        meta_dict["Number_of_channels"]
+    )
+
+    updated_meta_filename = csv_input_filename.replace(".csv", "_FILLED.csv")
+    meta_csv.to_csv(updated_meta_filename, index=False)
 
     return meta_dict
 
