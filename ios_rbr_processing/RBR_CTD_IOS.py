@@ -3776,134 +3776,168 @@ def write_data(
     outputs:
         - Data values printed to open IOS header file, but nothing returned by the function
     """
-    if have_fluor and have_oxy:
-        for i in range(len(cast_data["cast" + str(cast_number)])):
-            # print(cast_data['cast' + str(cast_number)]['Pressure'][i] +
-            # cast_data['cast' + str(cast_number)]['Depth'][i] + "  ")
-            print(
-                "{:>7}".format(cast_data["cast" + str(cast_number)].loc[i, "Pressure"])
-                + " "
-                + "{:>6}".format(cast_data["cast" + str(cast_number)].loc[i, "Depth"])
-                + " "
-                + "{:>8}".format(
-                    cast_data["cast" + str(cast_number)].loc[i, "Temperature"]
+    # --------------
+    channel_widths_all = {"Pressure": "{:>7}",
+                          "Depth": "{:>6}",
+                          "Temperature": "{:>8}",
+                          "Salinity": "{:>8}",
+                          "Fluorescence": "{:>7}",
+                          "Oxygen": "{:>7}",
+                          "Oxygen_mL_L": "{:>7}",
+                          "Oxygen_umol_kg": "{:>7}",
+                          "Conductivity": "{:>9}",
+                          "Observation_counts": "{:>4}"}
+
+    channel_widths_available = {}
+    for cn in channel_names:
+        channel_widths_available[cn] = channel_widths_all[cn]
+
+    # for cn in channel_widths.keys():  RuntimeError: dictionary changed size during iteration
+    #     if cn not in channel_names:
+    #         _ = channel_widths.pop(cn)
+
+    for i in range(len(cast_data["cast" + str(cast_number)])):
+        print_line = ""
+        for cn, wd in channel_widths_available.items():
+            if cn != "Observation_counts":
+                print_line += (
+                    wd.format(cast_data["cast" + str(cast_number)].loc[i, cn])
+                    + " "
                 )
-                + " "
-                + "{:>8}".format(
-                    cast_data["cast" + str(cast_number)].loc[i, "Salinity"]
-                )
-                + " "
-                + "{:>7}".format(
-                    cast_data["cast" + str(cast_number)].loc[i, "Fluorescence"]
-                )
-                + " "
-                + "{:>7}".format(cast_data["cast" + str(cast_number)].loc[i, "Oxygen"])
-                + " "
-                + "{:>7}".format(
-                    cast_data["cast" + str(cast_number)].loc[i, "Oxygen_mL_L"]
-                )
-                + " "
-                + "{:>7}".format(
-                    cast_data["cast" + str(cast_number)].loc[i, "Oxygen_umol_kg"]
-                )
-                + " "
-                + "{:>9}".format(
-                    cast_data["cast" + str(cast_number)].loc[i, "Conductivity"]
-                )
-                + " "
-                + "{:>4}".format(
-                    cast_data["cast" + str(cast_number)].loc[i, "Observation_counts"]
-                )
-                + " "
-            )
-    elif have_fluor:
-        for i in range(len(cast_data["cast" + str(cast_number)])):
-            print(
-                "{:>7}".format(cast_data["cast" + str(cast_number)].loc[i, "Pressure"])
-                + " "
-                + "{:>6}".format(cast_data["cast" + str(cast_number)].loc[i, "Depth"])
-                + " "
-                + "{:>8}".format(
-                    cast_data["cast" + str(cast_number)].loc[i, "Temperature"]
-                )
-                + " "
-                + "{:>8}".format(
-                    cast_data["cast" + str(cast_number)].loc[i, "Salinity"]
-                )
-                + " "
-                + "{:>7}".format(
-                    cast_data["cast" + str(cast_number)].loc[i, "Fluorescence"]
-                )
-                + " "
-                + "{:>9}".format(
-                    cast_data["cast" + str(cast_number)].loc[i, "Conductivity"]
-                )
-                + " "
-                + "{:>4}".format(
-                    cast_data["cast" + str(cast_number)].loc[i, "Observation_counts"]
-                )
-                + " "
-            )
-    elif have_oxy:
-        for i in range(len(cast_data["cast" + str(cast_number)])):
-            print(
-                "{:>7}".format(cast_data["cast" + str(cast_number)].loc[i, "Pressure"])
-                + " "
-                + "{:>6}".format(cast_data["cast" + str(cast_number)].loc[i, "Depth"])
-                + " "
-                + "{:>8}".format(
-                    cast_data["cast" + str(cast_number)].loc[i, "Temperature"]
-                )
-                + " "
-                + "{:>8}".format(
-                    cast_data["cast" + str(cast_number)].loc[i, "Salinity"]
-                )
-                + " "
-                + "{:>7}".format(cast_data["cast" + str(cast_number)].loc[i, "Oxygen"])
-                + " "
-                + "{:>7}".format(
-                    cast_data["cast" + str(cast_number)].loc[i, "Oxygen_mL_L"]
-                )
-                + " "
-                + "{:>7}".format(
-                    cast_data["cast" + str(cast_number)].loc[i, "Oxygen_umol_kg"]
-                )
-                + " "
-                + "{:>9}".format(
-                    cast_data["cast" + str(cast_number)].loc[i, "Conductivity"]
-                )
-                + " "
-                + "{:>4}".format(
-                    cast_data["cast" + str(cast_number)].loc[i, "Observation_counts"]
-                )
-                + " "
-            )
-    else:
-        for i in range(len(cast_data["cast" + str(cast_number)])):
-            # print(cast_data['cast' + str(cast_number)]['Pressure'][i] +
-            # cast_data['cast' + str(cast_number)]['Depth'][i] + "  ")
-            print(
-                "{:>7}".format(cast_data["cast" + str(cast_number)].loc[i, "Pressure"])
-                + " "
-                + "{:>6}".format(cast_data["cast" + str(cast_number)].loc[i, "Depth"])
-                + " "
-                + "{:>8}".format(
-                    cast_data["cast" + str(cast_number)].loc[i, "Temperature"]
-                )
-                + " "
-                + "{:>8}".format(
-                    cast_data["cast" + str(cast_number)].loc[i, "Salinity"]
-                )
-                + " "
-                + "{:>9}".format(
-                    cast_data["cast" + str(cast_number)].loc[i, "Conductivity"]
-                )
-                + " "
-                + "{:>4}".format(
-                    cast_data["cast" + str(cast_number)].loc[i, "Observation_counts"]
-                )
-                + " "
-            )
+            else:
+                print_line += (
+                        wd.format(cast_data["cast" + str(cast_number)].loc[i, cn])
+                )  # Omit space after the last column, which is Observation_counts
+        print(print_line)
+    # ---------------
+    # if have_fluor and have_oxy:
+    #     for i in range(len(cast_data["cast" + str(cast_number)])):
+    #         # print(cast_data['cast' + str(cast_number)]['Pressure'][i] +
+    #         # cast_data['cast' + str(cast_number)]['Depth'][i] + "  ")
+    #         print(
+    #             "{:>7}".format(cast_data["cast" + str(cast_number)].loc[i, "Pressure"])
+    #             + " "
+    #             + "{:>6}".format(cast_data["cast" + str(cast_number)].loc[i, "Depth"])
+    #             + " "
+    #             + "{:>8}".format(
+    #                 cast_data["cast" + str(cast_number)].loc[i, "Temperature"]
+    #             )
+    #             + " "
+    #             + "{:>8}".format(
+    #                 cast_data["cast" + str(cast_number)].loc[i, "Salinity"]
+    #             )
+    #             + " "
+    #             + "{:>7}".format(
+    #                 cast_data["cast" + str(cast_number)].loc[i, "Fluorescence"]
+    #             )
+    #             + " "
+    #             + "{:>7}".format(cast_data["cast" + str(cast_number)].loc[i, "Oxygen"])
+    #             + " "
+    #             + "{:>7}".format(
+    #                 cast_data["cast" + str(cast_number)].loc[i, "Oxygen_mL_L"]
+    #             )
+    #             + " "
+    #             + "{:>7}".format(
+    #                 cast_data["cast" + str(cast_number)].loc[i, "Oxygen_umol_kg"]
+    #             )
+    #             + " "
+    #             + "{:>9}".format(
+    #                 cast_data["cast" + str(cast_number)].loc[i, "Conductivity"]
+    #             )
+    #             + " "
+    #             + "{:>4}".format(
+    #                 cast_data["cast" + str(cast_number)].loc[i, "Observation_counts"]
+    #             )
+    #             + " "
+    #         )
+    # elif have_fluor:
+    #     for i in range(len(cast_data["cast" + str(cast_number)])):
+    #         print(
+    #             "{:>7}".format(cast_data["cast" + str(cast_number)].loc[i, "Pressure"])
+    #             + " "
+    #             + "{:>6}".format(cast_data["cast" + str(cast_number)].loc[i, "Depth"])
+    #             + " "
+    #             + "{:>8}".format(
+    #                 cast_data["cast" + str(cast_number)].loc[i, "Temperature"]
+    #             )
+    #             + " "
+    #             + "{:>8}".format(
+    #                 cast_data["cast" + str(cast_number)].loc[i, "Salinity"]
+    #             )
+    #             + " "
+    #             + "{:>7}".format(
+    #                 cast_data["cast" + str(cast_number)].loc[i, "Fluorescence"]
+    #             )
+    #             + " "
+    #             + "{:>9}".format(
+    #                 cast_data["cast" + str(cast_number)].loc[i, "Conductivity"]
+    #             )
+    #             + " "
+    #             + "{:>4}".format(
+    #                 cast_data["cast" + str(cast_number)].loc[i, "Observation_counts"]
+    #             )
+    #             + " "
+    #         )
+    # elif have_oxy:
+    #     for i in range(len(cast_data["cast" + str(cast_number)])):
+    #         print(
+    #             "{:>7}".format(cast_data["cast" + str(cast_number)].loc[i, "Pressure"])
+    #             + " "
+    #             + "{:>6}".format(cast_data["cast" + str(cast_number)].loc[i, "Depth"])
+    #             + " "
+    #             + "{:>8}".format(
+    #                 cast_data["cast" + str(cast_number)].loc[i, "Temperature"]
+    #             )
+    #             + " "
+    #             + "{:>8}".format(
+    #                 cast_data["cast" + str(cast_number)].loc[i, "Salinity"]
+    #             )
+    #             + " "
+    #             + "{:>7}".format(cast_data["cast" + str(cast_number)].loc[i, "Oxygen"])
+    #             + " "
+    #             + "{:>7}".format(
+    #                 cast_data["cast" + str(cast_number)].loc[i, "Oxygen_mL_L"]
+    #             )
+    #             + " "
+    #             + "{:>7}".format(
+    #                 cast_data["cast" + str(cast_number)].loc[i, "Oxygen_umol_kg"]
+    #             )
+    #             + " "
+    #             + "{:>9}".format(
+    #                 cast_data["cast" + str(cast_number)].loc[i, "Conductivity"]
+    #             )
+    #             + " "
+    #             + "{:>4}".format(
+    #                 cast_data["cast" + str(cast_number)].loc[i, "Observation_counts"]
+    #             )
+    #             + " "
+    #         )
+    # else:
+    #     for i in range(len(cast_data["cast" + str(cast_number)])):
+    #         # print(cast_data['cast' + str(cast_number)]['Pressure'][i] +
+    #         # cast_data['cast' + str(cast_number)]['Depth'][i] + "  ")
+    #         print(
+    #             "{:>7}".format(cast_data["cast" + str(cast_number)].loc[i, "Pressure"])
+    #             + " "
+    #             + "{:>6}".format(cast_data["cast" + str(cast_number)].loc[i, "Depth"])
+    #             + " "
+    #             + "{:>8}".format(
+    #                 cast_data["cast" + str(cast_number)].loc[i, "Temperature"]
+    #             )
+    #             + " "
+    #             + "{:>8}".format(
+    #                 cast_data["cast" + str(cast_number)].loc[i, "Salinity"]
+    #             )
+    #             + " "
+    #             + "{:>9}".format(
+    #                 cast_data["cast" + str(cast_number)].loc[i, "Conductivity"]
+    #             )
+    #             + " "
+    #             + "{:>4}".format(
+    #                 cast_data["cast" + str(cast_number)].loc[i, "Observation_counts"]
+    #             )
+    #             + " "
+    #         )
 
     return
 
