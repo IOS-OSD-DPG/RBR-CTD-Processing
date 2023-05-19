@@ -3020,12 +3020,10 @@ def plot_processed(cast_final: dict, dest_dir: str) -> None:
 
 
 def write_file(
-    cast_number,
-    cast_original: dict,
-    cast_final: dict,
-    metadata_dict: dict,
-    have_fluor: bool,
-    have_oxy: bool,
+        cast_number,
+        cast_original: dict,
+        cast_final: dict,
+        metadata_dict: dict,
 ) -> None:
     """
     Write file section of IOS header file
@@ -3129,12 +3127,9 @@ def write_file(
     }
 
     # Remove unavailable channels
-    if not have_fluor:
-        _ = channel_dict.pop("Fluorescence")
-
-    if not have_oxy:
-        for n in ["Oxygen", "Oxygen_mL_L", "Oxygen_umol_kg"]:
-            _ = channel_dict.pop(n)
+    for channel in VARIABLES_POSSIBLE:
+        if channel not in cast_final[f"cast{cast_number}"]:
+            _ = channel_dict.pop(channel)
 
     current_chan_no = 1  # Update current channel number as iteration progresses
     for i, key in enumerate(channel_dict):
@@ -3365,18 +3360,20 @@ def write_instrument(metadata_dict: dict) -> None:
 
 
 def write_history(
-    have_oxy: bool,
-    cast_original: dict,
-    cast_clip: dict,
-    cast_filtered: dict,
-    cast_shift_c: dict,
-    cast_shift_o: dict,
-    cast_d_o_conc: dict,
-    cast_wakeeffect: dict,
-    cast_binned: dict,
-    cast_final: dict,
-    cast_number: int,
-    metadata_dict: dict,
+        cast_original: dict,
+        cast_correct_time: dict,
+        cast_calib: dict,
+        cast_clip: dict,
+        cast_filtered: dict,
+        cast_shift_c: dict,
+        cast_shift_o: dict,
+        cast_d_o_conc: dict,
+        cast_wakeeffect: dict,
+        cast_binned: dict,
+        cast_dropvars: dict,
+        cast_final: dict,
+        cast_number: int,
+        metadata_dict: dict,
 ):
     """
     function to write raw info
@@ -3417,32 +3414,46 @@ def write_history(
         + "{:>9}".format(str(cast_original["cast" + str(cast_number)].shape[0]))
         + "{:>10}".format(str(cast_original["cast" + str(cast_number)].shape[0]))
     )
-    print(
-        "        CALIB    "
-        + "{:7}".format(str(1.0))
-        + "{:11}".format(
-            metadata_dict["CALIB_Time"].strftime(time_format)[0:-7].split(" ")[0]
+    if "CORRECT_TIME_OFFSET_Time" in metadata_dict.keys():
+        print(
+            "        CORRECT_T"
+            + "{:7}".format(str(1.0))
+            + "{:11}".format(
+                metadata_dict["CORRECT_TIME_OFFSET_Time"].strftime(time_format)[0:-7].split(" ")[0]
+            )
+            + "{:9}".format(
+                metadata_dict["CORRECT_TIME_OFFSET_Time"].strftime(time_format)[0:-7].split(" ")[1]
+            )
+            + "{:>9}".format(str(cast_original["cast" + str(cast_number)].shape[0]))
+            + "{:>10}".format(str(cast_correct_time["cast" + str(cast_number)].shape[0]))
         )
-        + "{:9}".format(
-            metadata_dict["CALIB_Time"].strftime(time_format)[0:-7].split(" ")[1]
+    if "CALIB_Time" in metadata_dict.keys():
+        print(
+            "        CALIB    "
+            + "{:7}".format(str(1.0))
+            + "{:11}".format(
+                metadata_dict["CALIB_Time"].strftime(time_format)[0:-7].split(" ")[0]
+            )
+            + "{:9}".format(
+                metadata_dict["CALIB_Time"].strftime(time_format)[0:-7].split(" ")[1]
+            )
+            + "{:>9}".format(str(cast_correct_time["cast" + str(cast_number)].shape[0]))
+            + "{:>10}".format(str(cast_calib["cast" + str(cast_number)].shape[0]))
         )
-        + "{:>9}".format(str(cast_original["cast" + str(cast_number)].shape[0]))
-        + "{:>10}".format(str(cast_original["cast" + str(cast_number)].shape[0]))
-    )
     print(
         "        CLIP     "
         + "{:7}".format(str(1.0))
         + "{:11}".format(
             metadata_dict["CLIP_D_Time" + str(cast_number)]
-            .strftime(time_format)[0:-7]
-            .split(" ")[0]
+                .strftime(time_format)[0:-7]
+                .split(" ")[0]
         )
         + "{:9}".format(
             metadata_dict["CLIP_D_Time" + str(cast_number)]
-            .strftime(time_format)[0:-7]
-            .split(" ")[1]
+                .strftime(time_format)[0:-7]
+                .split(" ")[1]
         )
-        + "{:>9}".format(str(cast_original["cast" + str(cast_number)].shape[0]))
+        + "{:>9}".format(str(cast_calib["cast" + str(cast_number)].shape[0]))
         + "{:>10}".format(str(cast_clip["cast" + str(cast_number)].shape[0]))
     )
     print(
@@ -3462,31 +3473,31 @@ def write_history(
         + "{:7}".format(str(1.0))
         + "{:11}".format(
             metadata_dict["SHIFT_Conductivity_Time"]
-            .strftime(time_format)[0:-7]
-            .split(" ")[0]
+                .strftime(time_format)[0:-7]
+                .split(" ")[0]
         )
         + "{:9}".format(
             metadata_dict["SHIFT_Conductivity_Time"]
-            .strftime(time_format)[0:-7]
-            .split(" ")[1]
+                .strftime(time_format)[0:-7]
+                .split(" ")[1]
         )
         + "{:>9}".format(str(cast_filtered["cast" + str(cast_number)].shape[0]))
         + "{:>10}".format(str(cast_shift_c["cast" + str(cast_number)].shape[0]))
     )
-    if have_oxy:
+    if "SHIFT_Oxygen_Time" in metadata_dict.keys():
         # Add entries for oxygen saturation shift and oxygen concentration derivation
         print(
             "        SHIFT    "
             + "{:7}".format(str(1.0))
             + "{:11}".format(
                 metadata_dict["SHIFT_Oxygen_Time"]
-                .strftime(time_format)[0:-7]
-                .split(" ")[0]
+                    .strftime(time_format)[0:-7]
+                    .split(" ")[0]
             )
             + "{:9}".format(
                 metadata_dict["SHIFT_Oxygen_Time"]
-                .strftime(time_format)[0:-7]
-                .split(" ")[1]
+                    .strftime(time_format)[0:-7]
+                    .split(" ")[1]
             )
             + "{:>9}".format(str(cast_shift_c["cast" + str(cast_number)].shape[0]))
             + "{:>10}".format(str(cast_shift_o["cast" + str(cast_number)].shape[0]))
@@ -3496,61 +3507,39 @@ def write_history(
             + "{:7}".format(str(1.0))
             + "{:11}".format(
                 metadata_dict["DERIVE_OXYGEN_CONCENTRATION_Time"]
-                .strftime(time_format)[0:-7]
-                .split(" ")[0]
+                    .strftime(time_format)[0:-7]
+                    .split(" ")[0]
             )
             + "{:9}".format(
                 metadata_dict["DERIVE_OXYGEN_CONCENTRATION_Time"]
-                .strftime(time_format)[0:-7]
-                .split(" ")[1]
+                    .strftime(time_format)[0:-7]
+                    .split(" ")[1]
             )
             + "{:>9}".format(str(cast_shift_o["cast" + str(cast_number)].shape[0]))
             + "{:>10}".format(str(cast_d_o_conc["cast" + str(cast_number)].shape[0]))
         )
-        print(
-            "        DELETE   "
-            + "{:7}".format(str(1.0))
-            + "{:11}".format(
-                metadata_dict["DELETE_PRESSURE_REVERSAL_Time"]
+    # applies to all cases
+    print(
+        "        DELETE   "
+        + "{:7}".format(str(1.0))
+        + "{:11}".format(
+            metadata_dict["DELETE_PRESSURE_REVERSAL_Time"]
                 .strftime(time_format)[0:-7]
                 .split(" ")[0]
-            )
-            + "{:9}".format(
-                metadata_dict["DELETE_PRESSURE_REVERSAL_Time"]
+        )
+        + "{:9}".format(
+            metadata_dict["DELETE_PRESSURE_REVERSAL_Time"]
                 .strftime(time_format)[0:-7]
                 .split(" ")[1]
-            )
-            + "{:>9}".format(str(cast_shift_o["cast" + str(cast_number)].shape[0]))
-            + "{:>10}".format(
-                str(
-                    cast_wakeeffect["cast" + str(cast_number)].shape[0]
-                    - list(cast_wakeeffect["cast" + str(cast_number)].isna().sum())[0]
-                )
+        )
+        + "{:>9}".format(str(cast_shift_o["cast" + str(cast_number)].shape[0]))
+        + "{:>10}".format(
+            str(
+                cast_wakeeffect["cast" + str(cast_number)].shape[0]
+                - list(cast_wakeeffect["cast" + str(cast_number)].isna().sum())[0]
             )
         )
-    else:
-        print(
-            "        DELETE   "
-            + "{:7}".format(str(1.0))
-            + "{:11}".format(
-                metadata_dict["DELETE_PRESSURE_REVERSAL_Time"]
-                .strftime(time_format)[0:-7]
-                .split(" ")[0]
-            )
-            + "{:9}".format(
-                metadata_dict["DELETE_PRESSURE_REVERSAL_Time"]
-                .strftime(time_format)[0:-7]
-                .split(" ")[1]
-            )
-            + "{:>9}".format(str(cast_shift_c["cast" + str(cast_number)].shape[0]))
-            + "{:>10}".format(
-                str(
-                    cast_wakeeffect["cast" + str(cast_number)].shape[0]
-                    - list(cast_wakeeffect["cast" + str(cast_number)].isna().sum())[0]
-                )
-            )
-        )
-    # The rest applies to all cases
+    )
     print(
         "        BINAVE   "
         + "{:7}".format(str(1.0))
@@ -3560,9 +3549,36 @@ def write_history(
         + "{:9}".format(
             metadata_dict["BINAVE_Time"].strftime(time_format)[0:-7].split(" ")[1]
         )
-        + "{:>9}".format(str(cast_wakeeffect["cast" + str(cast_number)].shape[0]))
+        + "{:>9}".format(
+            str(
+                cast_wakeeffect["cast" + str(cast_number)].shape[0]
+                - list(cast_wakeeffect["cast" + str(cast_number)].isna().sum())[0]
+            )
+        )
         + "{:>10}".format(str(cast_binned["cast" + str(cast_number)].shape[0]))
     )
+    if "DROP_SELECT_VARS_Time" in metadata_dict.keys():
+        print(
+            "        DROP_SLCT"
+            + "{:7}".format(str(1.0))
+            + "{:11}".format(
+                metadata_dict["DROP_SELECT_VARS_Time"]
+                    .strftime(time_format)[0:-7]
+                    .split(" ")[0]
+            )
+            + "{:9}".format(
+                metadata_dict["DROP_SELECT_VARS_Time"]
+                    .strftime(time_format)[0:-7]
+                    .split(" ")[1]
+            )
+            + "{:>9}".format(str(cast_binned["cast" + str(cast_number)].shape[0]))
+            + "{:>10}".format(
+                str(
+                    cast_dropvars["cast" + str(cast_number)].shape[0]
+                    - list(cast_dropvars["cast" + str(cast_number)].isna().sum())[0]
+                )
+            )
+        )
     print(
         "        EDIT     "
         + "{:7}".format(str(1.0))
@@ -3572,7 +3588,7 @@ def write_history(
         + "{:9}".format(
             metadata_dict["FINALEDIT_Time"].strftime(time_format)[0:-7].split(" ")[1]
         )
-        + "{:>9}".format(str(cast_binned["cast" + str(cast_number)].shape[0]))
+        + "{:>9}".format(str(cast_dropvars["cast" + str(cast_number)].shape[0]))
         + "{:>10}".format(str(cast_final["cast" + str(cast_number)].shape[0]))
     )
 
@@ -3588,7 +3604,7 @@ def write_history(
 
 
 def write_comments(
-    have_fluor: bool, have_oxy: bool, processing_report_name: str
+        processing_report_name: str, channel_names   # have_fluor: bool, have_oxy: bool,
 ) -> None:
     """Write comments section in the IOS header file
     inputs:
@@ -3618,49 +3634,138 @@ def write_comments(
     print()
     print("    " + "-" * 85)
 
-    if have_fluor and have_oxy:
-        print("!--1--- --2--- ---3---- ---4---- ---5--- ---6--- ---7--- ---8--- ----9---- -10-")
-        print("!Pressu Depth  Temperat Salinity Fluores Oxygen: Oxygen: Oxygen: Conductiv Numb")
-        print("!re            ure               cence:  Dissolv Dissolv Dissolv ity       er_o")
-        print("!                                URU     ed:     ed: RBR ed: RBR           ~bin")
-        print("!                                        Saturat                           _rec")
-        print("!                                        ion:RBR                           ords")
-        print("!------ ------ -------- -------- ------- ------- ------- ------- --------- ----")
-        print("*END OF HEADER")
-    elif have_fluor:
-        print("!--1--- --2--- ---3---- ---4---- ---5--- ----7---- -8--")
-        print("!Pressu Depth  Temperat Salinity Fluores Conductiv Numb")
-        print("!re            ure               cence:  ity       er_o")
-        print("!                                URU               ~bin")
-        print("!                                                  _rec")
-        print("!                                                  ords")
-        print("!------ ------ -------- -------- ------- --------- ----")
-        print("*END OF HEADER")
-    elif have_oxy:
-        print("!--1--- --2--- ---3---- ---4---- ---6--- ---7--- ---8--- ----7---- -8--")
-        print("!Pressu Depth  Temperat Salinity Oxygen: Oxygen: Oxygen: Conductiv Numb")
-        print("!re            ure               Dissolv Dissolv Dissolv ity       er_o")
-        print("!                                ed:     ed: RBR ed: RBR           ~bin")
-        print("!                                Saturat                           _rec")
-        print("!                                ion:RBR                           ords")
-        print("!------ ------ -------- -------- ------- ------- ------- --------- ----")
-        print("*END OF HEADER")
-    else:
-        print("!--1--- --2--- ---3---- ---4---- ----5---- -6--")
-        print("!Pressu Depth  Temperat Salinity Conductiv Numb")
-        print("!re            ure               ity       er_o")
-        print("!                                          ~bin")
-        print("!                                          _rec")
-        print("!                                          ords")
-        print("!------ ------ -------- -------- --------- ----")
-        print("*END OF HEADER")
+    # ----------------------
+    # 7-line table header
+    print_list = ["!--1--- --2--- ",
+                  "!Pressu Depth  ",
+                  "!re            ",
+                  "!              ",
+                  "!              ",
+                  "!              ",
+                  "!------ ------ "]
+
+    print_dict = {"Temperature": ["---*---- ",
+                                  "Temperat ",
+                                  "ure      ",
+                                  "         ",
+                                  "         ",
+                                  "         ",
+                                  "-------- "],
+                  "Salinity": ["---*---- ",
+                               "Salinity ",
+                               "         ",
+                               "         ",
+                               "         ",
+                               "         ",
+                               "-------- "],
+                  "Fluorescence": ["---*--- ",
+                                   "Fluores ",
+                                   "cence:  ",
+                                   "URU     ",
+                                   "        ",
+                                   "        ",
+                                   "------- "],
+                  "Oxygen": ["---*--- "
+                             "Oxygen: ",
+                             "Dissolv ",
+                             "ed:     ",
+                             "Saturat ",
+                             "ion:RBR ",
+                             "------- "],
+                  "Oxygen_mL_L": ["---*--- ",
+                                  "Oxygen: ",
+                                  "Dissolv ",
+                                  "ed: RBR ",
+                                  "        ",
+                                  "        ",
+                                  "------- "],
+                  "Oxygen_umol_kg": ["---*--- ",
+                                     "Oxygen: ",
+                                     "Dissolv ",
+                                     "ed: RBR ",
+                                     "        ",
+                                     "        ",
+                                     "------- "],
+                  "Conductivity": ["----*---- ",
+                                   "Conductiv ",
+                                   "ity       ",
+                                   "          ",
+                                   "          ",
+                                   "          ",
+                                   "--------- "],
+                  "Observation_counts": ["-*--",
+                                         "Numb",
+                                         "er_o",
+                                         "~bin",
+                                         "_rec",
+                                         "ords",
+                                         "----"]}
+
+    channel_counter = 3
+    # Skip Pressure and Depth
+    for cn in channel_names[2:]:
+        # Add columns to print list
+        if cn == "Observation_counts":
+            # account for single vs double digit channel numbers observation counts
+            # in terms of maintaining constant channel width
+            print_list[0] += print_dict[cn][0].replace("*", str(channel_counter)[:4])
+        else:
+            print_list[0] += print_dict[cn][0].replace("*", str(channel_counter))
+        for i in range(1, len(print_list)):
+            print_list[i] += print_dict[cn][i]
+        # Update channel counter
+        channel_counter += 1
+
+    print_list.append("*END OF HEADER")
+    # Now print the statements
+    for line in print_list:
+        print(line)
+    # ----------------------
+
+    # Make more flexible if channels other than oxygen or fluorescence were dropped
+    # if have_fluor and have_oxy:
+    #     print("!--1--- --2--- ---3---- ---4---- ---5--- ---6--- ---7--- ---8--- ----9---- -10-")
+    #     print("!Pressu Depth  Temperat Salinity Fluores Oxygen: Oxygen: Oxygen: Conductiv Numb")
+    #     print("!re            ure               cence:  Dissolv Dissolv Dissolv ity       er_o")
+    #     print("!                                URU     ed:     ed: RBR ed: RBR           ~bin")
+    #     print("!                                        Saturat                           _rec")
+    #     print("!                                        ion:RBR                           ords")
+    #     print("!------ ------ -------- -------- ------- ------- ------- ------- --------- ----")
+    #     print("*END OF HEADER")
+    # elif have_fluor:
+    #     print("!--1--- --2--- ---3---- ---4---- ---5--- ----7---- -8--")
+    #     print("!Pressu Depth  Temperat Salinity Fluores Conductiv Numb")
+    #     print("!re            ure               cence:  ity       er_o")
+    #     print("!                                URU               ~bin")
+    #     print("!                                                  _rec")
+    #     print("!                                                  ords")
+    #     print("!------ ------ -------- -------- ------- --------- ----")
+    #     print("*END OF HEADER")
+    # elif have_oxy:
+    #     print("!--1--- --2--- ---3---- ---4---- ---6--- ---7--- ---8--- ----7---- -8--")
+    #     print("!Pressu Depth  Temperat Salinity Oxygen: Oxygen: Oxygen: Conductiv Numb")
+    #     print("!re            ure               Dissolv Dissolv Dissolv ity       er_o")
+    #     print("!                                ed:     ed: RBR ed: RBR           ~bin")
+    #     print("!                                Saturat                           _rec")
+    #     print("!                                ion:RBR                           ords")
+    #     print("!------ ------ -------- -------- ------- ------- ------- --------- ----")
+    #     print("*END OF HEADER")
+    # else:
+    #     print("!--1--- --2--- ---3---- ---4---- ----5---- -6--")
+    #     print("!Pressu Depth  Temperat Salinity Conductiv Numb")
+    #     print("!re            ure               ity       er_o")
+    #     print("!                                          ~bin")
+    #     print("!                                          _rec")
+    #     print("!                                          ords")
+    #     print("!------ ------ -------- -------- --------- ----")
+    #     print("*END OF HEADER")
 
     return
 
 
 def write_data(
-    have_fluor: bool, have_oxy: bool, cast_data: dict, cast_number: int
-) -> None:  # , cast_d):
+        cast_data: dict, cast_number: int, channel_names
+) -> None:  # , have_fluor: bool, have_oxy: bool, cast_d):
     """
     Write data to header file, taking into account if fluorescence and oxygen data are there
     inputs:
@@ -3804,22 +3909,24 @@ def write_data(
 
 
 def main_header(
-    dest_dir,
-    n_cast: int,
-    metadata_dict: dict,
-    cast: dict,
-    cast_d: dict,
-    cast_d_clip: dict,
-    cast_d_filtered: dict,
-    cast_d_shift_c: dict,
-    cast_d_shift_o: dict,
-    cast_d_o_conc: dict,
-    cast_d_wakeeffect: dict,
-    cast_d_binned: dict,
-    cast_d_final: dict,
-    have_fluor: bool,
-    have_oxy: bool,
-    processing_report_name: str,
+        dest_dir: str,
+        n_cast: int,
+        metadata_dict: dict,
+        cast: dict,
+        cast_d: dict,
+        cast_d_correct_t: dict,
+        cast_d_calib: dict,
+        cast_d_clip: dict,
+        cast_d_filtered: dict,
+        cast_d_shift_c: dict,
+        cast_d_shift_o: dict,
+        cast_d_o_conc: dict,
+        cast_d_wakeeffect: dict,
+        cast_d_binned: dict,
+        cast_d_dropvars: dict,
+        cast_d_final: dict,
+        channel_names,
+        processing_report_name: str,
 ) -> str:
     """
     Main function for creating an IOS header file containing final processed RBR CTD data
@@ -3869,15 +3976,14 @@ def main_header(
         print("*" + dt_string)
         print(IOS_string)
         print()  # print("\n") pring("\n" * 40)
-        write_file(n_cast, cast, cast_d_final, metadata_dict, have_fluor, have_oxy)
-
-        # def write_file(cast_number, cast_original, cast_final, metadata_dict):
+        write_file(n_cast, cast, cast_d_final, metadata_dict)
         write_admin(metadata_dict=metadata_dict)
         write_location(cast_number=n_cast, metadata_dict=metadata_dict)
         write_instrument(metadata_dict=metadata_dict)
         write_history(
-            have_oxy,
             cast_d,
+            cast_d_correct_t,
+            cast_d_calib,
             cast_d_clip,
             cast_d_filtered,
             cast_d_shift_c,
@@ -3885,16 +3991,17 @@ def main_header(
             cast_d_o_conc,
             cast_d_wakeeffect,
             cast_d_binned,
+            cast_d_dropvars,
             cast_d_final,
             cast_number=n_cast,
             metadata_dict=metadata_dict,
         )
         write_comments(
-            have_fluor, have_oxy, processing_report_name
-        )  # , metadata_dict=meta_data, cast_d=cast_d)
+            processing_report_name, channel_names
+        )  # , metadata_dict=meta_data, cast_d=cast_d) have_fluor, have_oxy,
         write_data(
-            have_fluor, have_oxy, cast_d_final, cast_number=n_cast
-        )  # , cast_d=cast_d)
+            cast_d_final, cast_number=n_cast, channel_names=channel_names
+        )  # , cast_d=cast_d) have_fluor, have_oxy,
         sys.stdout.flush()  # Recommended by Tom
     finally:
         sys.stdout = orig_stdout
@@ -4214,12 +4321,19 @@ def second_step(
     # The cast numbers may not start at 1 and monotonously increase by 1
     cast_numbers = list(map(lambda x: int(x.split("cast")[-1]), cast_d_final.keys()))
     for i in cast_numbers:
+        # # Update have_fluor and have_oxy flags, since it could be different for different casts
+        # have_fluor = True if "Fluorescence" in cast_d_final[f"cast{i}"].columns else False
+        # have_oxy = True if "Oxygen" in cast_d_final[f"cast{i}"].columns else False
+        channel_names = cast_d_final[f"cast{i}"].columns
+        # Call the main header creation function
         main_header(
             dest_dir,
             i,
             metadata_dict,
             cast,
             cast_d,
+            cast_d_correct_t,
+            cast_d_pc,
             cast_d_clip,
             cast_d_filtered,
             cast_d_shift_c,
@@ -4227,9 +4341,9 @@ def second_step(
             cast_d_o_conc,
             cast_d_wakeeffect,
             cast_d_binned,
+            cast_d_dropvars,
             cast_d_final,
-            have_fluor,
-            have_oxy,
+            channel_names,
             processing_report_name,
         )
 
