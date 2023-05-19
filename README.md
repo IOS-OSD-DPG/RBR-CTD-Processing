@@ -15,7 +15,7 @@ RBR_CTD_IOS.py contains the following processing steps, which are accompanied by
 
 - Plot first-order pressure differences to check need for zero-order hold
 
-- (If needed) Correct for zero-order holds by replacing holds with NaNs
+- (If needed) Correct for zero-order holds by replacing holds with NaNs or with an interpolated value
 
 - (If needed) Correct for any time offsets in casts by adding a correction value in units of hours
 
