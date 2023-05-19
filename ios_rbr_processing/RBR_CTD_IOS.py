@@ -1849,13 +1849,103 @@ def CORRECT_HOLD(
     return
 
 
+def CORRECT_TIME_OFFSET(
+        dest_dir: str,
+        var: dict,
+        var_downcast: dict,
+        var_upcast: dict,
+        metadata_dict: dict,
+        correct_start_time_file: str,
+):
+    """
+    If time data were recorded incorrectly, apply an offset to correct the time data.
+    ***IMPORTANT: Input the correct times in string format, YYYY-mm-dd HH:MM:SS, so that
+    they can be converted to pandas datetime format!
+    Inputs:
+        - cast, downcast, upcast and metadata dictionaries
+        - correct_time: full path name to csv file containing correct start times for each cast
+    Outputs:
+        - corrected cast, downcast, and upcast dictionaries
+    """
+    # Read in the csv file of correct times
+    correct_time_df = pd.read_csv(
+        os.path.join(dest_dir, correct_start_time_file), header=None,
+        names=["cast_number", "correct_time"]
+    )
+
+    correct_time_df["time_dt"] = pd.to_datetime(correct_time_df["correct_time"])
+
+    var1 = deepcopy(var)
+    var2 = deepcopy(var_downcast)
+    var3 = deepcopy(var_upcast)
+
+    # Initialize processing history log if it doesn't already exist
+    if "Processing_history" not in metadata_dict.keys():
+        metadata_dict["Processing_history"] = ""
+
+    # Iterate through each cast
+    # index set as j instead of i, because the cast number might not equal the index
+    for j, cast_i in enumerate(var1.keys()):
+        # if type(correction_value) in [int, float]:
+        #     # Apply one correction value to all casts
+        #     correction_i = correction_value
+        # elif type(correction_value) in [list, tuple, np.ndarray]:
+        #     # Apply different correction values to different casts
+        #     correction_i = correction_value[i]
+        # else:
+        #     print("Correction value", correction_value, "format not supported")
+        #     return
+        correct_time_j = correct_time_df.loc[j, "time_dt"]
+
+        if correct_time_j == np.nan:
+            # Skip iteration if correction not needed for cast_i
+            continue
+        else:
+            # Find the offset of the correct time
+            # Index may not necessarily start at 0
+            var1_first_index = var1[cast_i].index[0]
+            data_start_time = pd.to_datetime(
+                var1[cast_i].loc[var1_first_index, "Date"] +
+                " " +
+                var1[cast_i].loc[var1_first_index, "TIME"]
+            )
+            # Take the difference between the two times
+            time_offset_j = correct_time_df.loc[j, "time_dt"] - data_start_time
+            # print("Time advance needed:", time_offset_j)
+
+            # Apply the difference to the cast, downcast and upcast
+            for v in [var1, var2, var3]:
+                date = v[cast_i]["Date"]
+                time = v[cast_i]["TIME"]
+                date_time = [f"{d} {t}" for d, t in zip(date, time)]
+                # print('time string data:', date_time[:10])
+                date_time_pd = pd.to_datetime(date_time)
+                # print('datetime data:', date_time_pd[:10])
+                # Add the correction in units of hours
+                corrected_date_time = date_time_pd + time_offset_j
+                # print('corrected datetime:', corrected_date_time[:10])
+                # Copy formatting from ADD_6LINEHEADER_2() function
+                v[cast_i].loc[:, "Date"] = corrected_date_time.strftime("%d/%m/%Y")
+                v[cast_i].loc[:, "TIME"] = corrected_date_time.strftime("%H:%M:%S")
+                # print("Date:", v[cast_i].loc[:, "Date"])
+                # print('TIME:', v[cast_i].loc[:, "TIME"])
+
+            # Update processing history log
+            metadata_dict['Processing_history'] += (
+                f"-CORRECT_TIME_OFFSET_{cast_i}: {time_offset_j} hours|"
+            )
+
+    metadata_dict["CORRECT_TIME_OFFSET_Time"] = datetime.now()
+
+    return var1, var2, var3
+
+
 def CALIB(
-    var: dict,
-    var_downcast: dict,
-    var_upcast: dict,
-    metadata_dict: dict,
-    zoh: bool,
-    pd_correction_value=0,
+        var: dict,
+        var_downcast: dict,
+        var_upcast: dict,
+        metadata_dict: dict,
+        pd_correction_value=0,
 ) -> tuple:
     """
     Correct pressure and depth data
@@ -1880,7 +1970,7 @@ def CALIB(
         var3[cast_i].Depth = var3[cast_i].Depth + pd_correction_value
 
     # check if a correction was done - need to see if this is the first addition of "processing history'
-    if not zoh:
+    if "Processing_history" not in metadata_dict.keys():
         metadata_dict["Processing_history"] = ""
 
     metadata_dict["Processing_history"] += (
@@ -2841,9 +2931,59 @@ def BINAVE(
     return var1, var2
 
 
-def FINAL_EDIT(
-    var_cast: dict, have_oxy: bool, have_fluor: bool, metadata_dict: dict
+def DROP_SELECT_VARS(
+        dest_dir: str, var_downcast: dict, drop_vars_file: str, metadata_dict: dict
 ) -> dict:
+    """
+    Optional: drop variable(s) from select casts
+    e.g., if oxygen sensor cap left on by accident and the data are useless
+    inputs:
+        - var_downcast: dictionary of downcast data
+        - drop_vars_file: file mapping cast numbers to names of variables to drop
+        - metadata_dict: dictionary containing metadata
+    outputs:
+        - dictionary of downcast data with the selected variables dropped from the
+        selected casts
+    """
+    drop_vars_df = pd.read_csv(
+        os.path.join(dest_dir, drop_vars_file), header=None,
+        names=["cast_number", "vars_to_drop"]
+    )
+
+    var = deepcopy(var_downcast)
+
+    # Iterate through all the casts in the dataframe
+    for i in range(len(drop_vars_df)):
+        # String may be in format "Oxygen, Fluorescence", hence unsplit
+        vars_to_drop_unsplit = drop_vars_df.loc[i, "vars_to_drop"]
+
+        # Skip if there are no vars to drop for the cast
+        if vars_to_drop_unsplit != np.nan:
+            cast_number = drop_vars_df.loc[i, "cast_number"]
+            # Extract the variables to drop from the vars_to_drop column
+            # Need to account for if var names are split by " ", ",", or some combination
+            # e.g., "Oxygen, Fluorescence" vs "oxygen fluorescence" vs " Oxygen," etc.
+            vars_to_drop_split = [
+                v for v in VARIABLES_POSSIBLE if v.lower() in vars_to_drop_unsplit.lower()
+            ]
+            # print(var.columns)
+            var[f"cast{cast_number}"] = var[f"cast{cast_number}"].drop(
+                columns=vars_to_drop_split
+            )
+            # Append a note to the processing history
+            metadata_dict["Processing_history"] += (
+                "-Remove Channels:|"
+                f" The following CHANNEL(S) were removed from cast {cast_number}:|"
+            )
+            for var_to_drop in vars_to_drop_split:
+                metadata_dict["Processing_history"] += f" {var_to_drop}|"
+
+    metadata_dict["DROP_SELECT_VARS_Time"] = datetime.now()
+
+    return var
+
+
+def FINAL_EDIT(var_downcast: dict, metadata_dict: dict) -> dict:
     """
     Final editing the profiles: edit header information, correct the unit of conductivity
     Inputs:
@@ -2854,74 +2994,101 @@ def FINAL_EDIT(
 
     # vars = list(dict.fromkeys(var_cast['cast1']))
     # cast_number = len(var_cast.keys())
-    var = deepcopy(var_cast)
+    var = deepcopy(var_downcast)
 
-    if have_oxy and have_fluor:
-        col_list = [
-            "Pressure",
-            "Depth",
-            "Temperature",
-            "Salinity",
-            "Fluorescence",
-            "Oxygen",
-            "Oxygen_mL_L",
-            "Oxygen_umol_kg",
-            "Conductivity",
-            "Observation_counts",
-        ]
-    elif have_oxy and not have_fluor:
-        col_list = [
-            "Pressure",
-            "Depth",
-            "Temperature",
-            "Salinity",
-            "Oxygen",
-            "Oxygen_mL_L",
-            "Oxygen_umol_kg",
-            "Conductivity",
-            "Observation_counts",
-        ]
-    elif have_fluor and not have_oxy:
-        col_list = [
-            "Pressure",
-            "Depth",
-            "Temperature",
-            "Salinity",
-            "Fluorescence",
-            "Conductivity",
-            "Observation_counts",
-        ]
-    else:
-        col_list = [
-            "Pressure",
-            "Depth",
-            "Temperature",
-            "Salinity",
-            "Conductivity",
-            "Observation_counts",
-        ]
+    # if have_oxy and have_fluor:
+    #     col_list = [
+    #         "Pressure",
+    #         "Depth",
+    #         "Temperature",
+    #         "Salinity",
+    #         "Fluorescence",
+    #         "Oxygen",
+    #         "Oxygen_mL_L",
+    #         "Oxygen_umol_kg",
+    #         "Conductivity",
+    #         "Observation_counts",
+    #     ]
+    # elif have_oxy and not have_fluor:
+    #     col_list = [
+    #         "Pressure",
+    #         "Depth",
+    #         "Temperature",
+    #         "Salinity",
+    #         "Oxygen",
+    #         "Oxygen_mL_L",
+    #         "Oxygen_umol_kg",
+    #         "Conductivity",
+    #         "Observation_counts",
+    #     ]
+    # elif have_fluor and not have_oxy:
+    #     col_list = [
+    #         "Pressure",
+    #         "Depth",
+    #         "Temperature",
+    #         "Salinity",
+    #         "Fluorescence",
+    #         "Conductivity",
+    #         "Observation_counts",
+    #     ]
+    # else:
+    #     col_list = [
+    #         "Pressure",
+    #         "Depth",
+    #         "Temperature",
+    #         "Salinity",
+    #         "Conductivity",
+    #         "Observation_counts",
+    #     ]
 
     # Do channel format corrections, unit conversions for each cast
     for cast_i in var.keys():
-        var[cast_i] = var[cast_i].reset_index(drop=True)  # drop index column
-        var[cast_i] = var[cast_i][col_list]  # select columns
-        var[cast_i].Conductivity = (
-            var[cast_i].Conductivity * 0.1
-        )  # convert Conductivity to S/m
+        # # Drop Date and Time:UTC columns - already dropped earlier
+        # print(var[cast_i].columns)
+        # var[cast_i] = var[cast_i].drop(columns=["Date", "TIME"])
+        # drop index column
+        var[cast_i] = var[cast_i].reset_index(drop=True)
+        # var[cast_i] = var[cast_i][col_list]  # select columns
+
+        # Add "if" conditions for all vars in case they were dropped in
+        # DROP_SELECT_VARS
+        if "Conductivity" in var[cast_i].columns:
+            var[cast_i].Conductivity = (
+                    var[cast_i].Conductivity * 0.1
+            )  # convert Conductivity to S/m
 
         var[cast_i].Pressure = var[cast_i].Pressure.apply("{:,.1f}".format)
         var[cast_i].Depth = var[cast_i].Depth.apply("{:,.1f}".format)
-        var[cast_i].Temperature = var[cast_i].Temperature.apply("{:,.4f}".format)
-        var[cast_i].Salinity = var[cast_i].Salinity.apply("{:,.4f}".format)
-        if have_fluor:
+
+        # Prepare columns to be re-arranged to make writing to the header files easier
+        column_order = ["Pressure", "Depth"]
+
+        if "Temperature" in var[cast_i].columns:
+            var[cast_i].Temperature = var[cast_i].Temperature.apply("{:,.4f}".format)
+            column_order.append("Temperature")
+        if "Salinity" in var[cast_i].columns:
+            var[cast_i].Salinity = var[cast_i].Salinity.apply("{:,.4f}".format)
+            column_order.append("Salinity")
+        if "Fluorescence" in var[cast_i].columns:
             var[cast_i].Fluorescence = var[cast_i].Fluorescence.apply("{:,.3f}".format)
-        if have_oxy:
+            column_order.append("Fluorescence")
+        if "Oxygen" in var[cast_i].columns:
             var[cast_i].Oxygen = var[cast_i].Oxygen.apply("{:,.2f}".format)
             var[cast_i].Oxygen_mL_L = var[cast_i].Oxygen_mL_L.apply("{:,.2f}".format)
             var[cast_i].Oxygen_umol_kg = var[cast_i].Oxygen_umol_kg.apply(
                 "{:,.2f}".format
             )
-        var[cast_i].Conductivity = var[cast_i].Conductivity.apply("{:,.6f}".format)
+            column_order.append("Oxygen")
+            column_order.append("Oxygen_mL_L")
+            column_order.append("Oxygen_umol_kg")
+        if "Conductivity" in var[cast_i].columns:
+            var[cast_i].Conductivity = var[cast_i].Conductivity.apply("{:,.6f}".format)
+            column_order.append("Conductivity")
+
+        column_order.append("Observation_counts")
+
+        # Re-sort the columns
+        var[cast_i] = var[cast_i][column_order]
 
         # HH DO NOT rename columns because would have repeating oxygen concentration names
         # # Rename the columns in each cast taking into account the existing order of columns
@@ -2948,7 +3115,7 @@ def FINAL_EDIT(
         " Date|"
         " TIME:UTC|"
         "-CALIB parameters:|"
-        " Calobration type = Correct|"
+        " Calibration type = Correct|"
         " Calibration applied:|"
         " Conductivity (S/m) = 0.1* Conductivity (mS/cm)|"
     )
@@ -4216,16 +4383,30 @@ def second_step(
             print(f"have_oxy: {have_oxy}, have_fluor: {have_fluor}")
         break
 
-    # Calibrate pressure and depth
-    cast_pc, cast_d_pc, cast_u_pc = CALIB(
-        cast, cast_d, cast_u, metadata_dict, zoh, pd_correction_value
-    )  # 0 if no neg pressures
-    if verbose:
-        print(
-            "The following correction value has been applied to Pressure and Depth:",
-            pd_correction_value,
-            sep="\n",
+    # Add time offset correction
+    if start_time_correction_file is not None:
+        cast_correct_t, cast_d_correct_t, cast_u_correct_t = CORRECT_TIME_OFFSET(
+            dest_dir, cast, cast_d, cast_u, metadata_dict, start_time_correction_file
         )
+        if verbose:
+            print("Time offset(s) corrected")
+    else:
+        cast_correct_t, cast_d_correct_t, cast_u_correct_t = cast, cast_d, cast_u
+
+    # Calibrate pressure and depth
+    if pd_correction_value != 0:
+        cast_pc, cast_d_pc, cast_u_pc = CALIB(
+            cast_correct_t, cast_d_correct_t, cast_u_correct_t, metadata_dict,
+            pd_correction_value
+        )  # 0 if no neg pressures
+        if verbose:
+            print(
+                "The following correction value has been applied to Pressure and Depth:",
+                pd_correction_value,
+                sep="\n",
+            )
+    else:
+        cast_pc, cast_d_pc, cast_u_pc = cast_correct_t, cast_d_correct_t, cast_u_correct_t
 
     # Commented this out because first plots are made earlier and in the past haven't been
     # remade after the zero hold correction. Plus there are two possible input_ext now.
@@ -4335,8 +4516,20 @@ def second_step(
     if verbose:
         print("Records averaged into equal-width pressure bins")
 
+    # Drop any requested variables, e.g. if oxygen sensor cap left on
+    # Allow the user to select which profiles to drop vars from, as only some profiles
+    # may be affected
+    if drop_vars_file is not None:
+        cast_d_dropvars = DROP_SELECT_VARS(
+            dest_dir, cast_d_binned, drop_vars_file, metadata_dict
+        )
+        if verbose:
+            print("Select variables dropped from casts specified in", drop_vars_file)
+    else:
+        cast_d_dropvars = cast_d_binned
+
     # Final edits: change conductivity units
-    cast_d_final = FINAL_EDIT(cast_d_binned, have_oxy, have_fluor, metadata_dict)
+    cast_d_final = FINAL_EDIT(cast_d_dropvars, metadata_dict)
 
     if verbose:
         print("Final edit completed")
