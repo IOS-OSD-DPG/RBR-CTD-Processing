@@ -1,4 +1,7 @@
 # RBR-CTD-Processing
+
+**This repository is deprecated. For RBR data processing please use https://github.com/IOS-OSD-DPG/IOS-CTD-Batch-Processing**
+
 To process raw RBR CTD data in Python. The main reference for this routine is Halverson et al. (2017). 
 
 RBR_Processing.py is deprecated and has been replaced by RBR_CTD_IOS.py.
